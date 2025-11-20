@@ -905,7 +905,7 @@ with filters_container:
     st.markdown("### 🎯 Data Filters")
     
     # WRAPPED IN EXPANDER
-    with st.expander("⏱️ Date-Time & Processing", expanded=True):
+    with st.expander("⏱️ Date-Time & Processing", expanded=False):
         # Date Range
         min_date, max_date = df.index.min().date(), df.index.max().date()
         
@@ -1337,7 +1337,7 @@ with tab2:
                     showline=True,
                     spikecolor=FONT_COLOR,
                     spikethickness=1,
-                    spikedash="dash",
+                    spikedash="dashdot",
                     row=rows, col=1 # Apply specifically to the master axis
                 )
                 
@@ -2028,3 +2028,14 @@ with st.sidebar:
         
         if len(df_filtered) > 50000:
             st.warning("⚠️ Consider resampling for better performance")
+
+# --- NEW: About Section ---
+    with st.expander("ℹ️ About", expanded=False):
+        st.markdown(
+            """
+            **Purpose:** An interactive, high-performance platform for time-series data exploration, visualization, and anomaly detection.
+            
+            **Built by - Jeevan A. Jadhav**
+            """
+        )
+    # --- END NEW Section ---
