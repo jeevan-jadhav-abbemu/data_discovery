@@ -90,7 +90,7 @@ except Exception:
 
 # Page Config
 st.set_page_config(
-    page_title="Data Discovery Dashboard",
+    page_title="Data Insights Hub",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -589,7 +589,7 @@ if 'df_filtered' not in st.session_state:
 
 # ==================== Main Header ====================
 
-st.markdown('<div class="main-title">📊 Data Discovery Dashboard</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">📊 Data Insights Hub</div>', unsafe_allow_html=True)
 st.markdown('<div class="subtitle">Professional time-series data exploration and visualization platform</div>', unsafe_allow_html=True)
 
 # ==================== Sidebar ====================
@@ -656,7 +656,7 @@ if df_raw is None or df_raw.empty:
     st.markdown("""
     <div style="text-align: center; padding: 2rem 0;">
         <div style="font-size: 80px; margin-bottom: 1rem;">📊</div>
-        <h2 style="color: #1F2A44; margin-bottom: 0.5rem;">Welcome to Data Discovery Dashboard</h2>
+        <h2 style="color: #1F2A44; margin-bottom: 0.5rem;">Welcome to Data Insights Hub</h2>
         <p style="color: #6B7280; font-size: 16px; margin-bottom: 2rem;">
             Upload your dataset to begin exploring insights and visualizations
         </p>
@@ -1215,11 +1215,13 @@ with tab2:
         )
     else:
         # Chart Controls
-        col1, col2, col3 = st.columns([2, 2, 1])
-        
+        col1, col2, col3 = st.columns([1, 1, 1])
         with col1:
+            # Custom styled label with larger font (24px)
+            st.markdown('<p style="font-size: 24px; font-weight: 700; margin-bottom: 5px; color: #1F2A44;">📊 Visualization Type</p>', unsafe_allow_html=True)
+            
             chart_choice = st.selectbox(
-                "📊 Visualization Type",
+                "Visualization Type", # This is now the hidden internal label
                 [
                     "Time Series Trend",
                     "Correlation Heatmap",
@@ -1234,7 +1236,8 @@ with tab2:
                     "ACF Plot",
                     "PACF Plot"
                 ],
-                index=0
+                index=0,
+                label_visibility="collapsed" # Hides the default small label
             )
         
         with col2:
