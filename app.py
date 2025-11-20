@@ -900,7 +900,7 @@ with st.sidebar:
     st.markdown("### 🎯 Data Filters")
     
     # WRAPPED IN EXPANDER
-    with st.expander("⏱️ Time & Processing", expanded=True):
+    with st.expander("⏱️ Date-Time & Processing", expanded=True):
         # Date Range
         min_date, max_date = df.index.min().date(), df.index.max().date()
         
@@ -1278,7 +1278,7 @@ with tab2:
                             mode="lines",
                             name=col,
                             line=dict(color=color, width=2),
-                            hovertemplate="%{x|%Y-%m-%d %H:%M:%S}<br>%{y:.2f}<extra>" + col + "</extra>"
+                            hovertemplate="%{y:.2f}" # Simplified template for unified view
                         ),
                         row=i, col=1
                     )
@@ -1292,14 +1292,35 @@ with tab2:
                         row=i, col=1
                     )
                 
-                # Add events
+                # Add events (Vertical lines for annotations)
                 for evt in st.session_state.events:
-                    for i in range(1, rows + 1):
-                        fig.add_vline(
-                            x=evt["time"],
-                            line=dict(color=evt["color"], width=2, dash="dash"),
-                            row=i, col=1
-                        )
+                    # We use add_vline which draws on the plot area
+                    fig.add_vline(
+                        x=evt["time"],
+                        line=dict(color=evt["color"], width=2, dash="dash"),
+                    )
+
+                # --- KEY FIX START: SHARED INTERACTION AXIS ---
+                # 1. Identify the bottom-most x-axis (e.g., 'x2', 'x3'). 
+                #    This axis has the tick labels and spans the full width.
+                master_xaxis = 'x' if rows == 1 else f'x{rows}'
+
+                # 2. Force ALL traces to use this single x-axis.
+                #    This ensures they all respond to the same hover event simultaneously.
+                #    They will stay stacked because they still use different Y-axes.
+                fig.update_traces(xaxis=master_xaxis)
+
+                # 3. Configure the master axis to draw a full-height line (spike)
+                fig.update_xaxes(
+                    showspikes=True,
+                    spikemode="across",    # Draws line across the entire plot container
+                    spikesnap="cursor",
+                    showline=True,
+                    spikecolor=FONT_COLOR,
+                    spikethickness=1,
+                    spikedash="dashdot"
+                )
+                # --- KEY FIX END ---
                 
                 fig.update_layout(
                     template=TEMPLATE,
@@ -1308,7 +1329,7 @@ with tab2:
                     font=dict(color=FONT_COLOR),
                     height=calculate_chart_height(rows, 250, 200),
                     margin=dict(l=60, r=40, t=50, b=60),
-                    hovermode="x unified",
+                    hovermode="x unified", # Create the single unified tooltip box
                     showlegend=False
                 )
                 
