@@ -200,40 +200,62 @@ st.markdown("""
         border-right: 1px solid #e0e0e0;
     }
     
-    /* Tabs Enhancement */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 12px;
-        padding: 12px;
-        background-color: #f8f9fa;
+    /* ============================================= */
+    /* CUSTOM NAVIGATION TABS (Radio Button Styling) */
+    /* ============================================= */
+    
+    div[role="radiogroup"] {
+        background-color: #f1f3f5;
+        padding: 6px;
         border-radius: 12px;
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
         margin-bottom: 24px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        box-shadow: inset 0 1px 3px rgba(0,0,0,0.06);
     }
     
-    .stTabs [data-baseweb="tab"] {
-        font-size: 30px;
-        font-weight: 700;
-        color: #6B7280;
-        padding: 14px 28px;
-        border-radius: 10px;
-        transition: all 0.3s;
+    div[role="radiogroup"] label {
+        flex-grow: 1;
         background-color: transparent;
-        letter-spacing: 0.4px;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        padding: 10px 16px;
+        text-align: center;
+        transition: all 0.2s;
+        font-weight: 600;
+        color: #4B5563;
+        cursor: pointer;
+        position: relative;
     }
     
-    .stTabs [data-baseweb="tab"]:hover {
-        background-color: #e5e7eb;
-        color: #1F2A44;
-        transform: translateY(-2px);
+    /* Hides the actual circle button of radio */
+    div[role="radiogroup"] label[data-testid*="stRadioButton"] > div:first-child {
+        display: none;
     }
     
-    .stTabs [data-baseweb="tab"][aria-selected="true"] {
-        background: linear-gradient(135deg, #2196F3 0%, #1976D2 50%, #1565C0 100%);
-        color: white;
-        box-shadow: 0 4px 12px rgba(33, 150, 243, 0.4), 0 2px 4px rgba(33, 150, 243, 0.3);
-        transform: translateY(-2px);
-        border: 1px solid rgba(255, 255, 255, 0.2);
+    /* 🌟 SELECTED STATE - 3D Light Blue Gradient 🌟 */
+    /* Uses :has() to target the label containing the checked input */
+    div[role="radiogroup"] label:has(input:checked) {
+        background: linear-gradient(to bottom, #E3F2FD 0%, #90CAF9 100%);
+        color: white !important;
+        border: 1px solid #0277BD;
+        /* Inner highlight for 3D effect + Drop shadow */
+        box-shadow: 
+            0 4px 6px rgba(0, 0, 0, 0.2),
+            inset 0 1px 0 rgba(255, 255, 255, 0.4),
+            inset 0 -2px 0 rgba(0, 0, 0, 0.1);
+        transform: translateY(-1px);
+        text-shadow: 0 1px 2px rgba(0,0,0,0.2);
     }
+
+    /* Hover state for non-selected items */
+    div[role="radiogroup"] label:not(:has(input:checked)):hover {
+        background-color: rgba(255,255,255,0.6);
+        color: #0288d1;
+    }
+    
+    /* ============================================= */
     
     /* Empty State */
     .empty-state {
@@ -312,23 +334,16 @@ st.markdown("""
         color: #9CA3AF;
     }
     
-    .dark-theme .stTabs [data-baseweb="tab-list"] {
+    .dark-theme div[role="radiogroup"] {
         background-color: #2B2F36;
     }
     
-    .dark-theme .stTabs [data-baseweb="tab"] {
+    .dark-theme div[role="radiogroup"] label {
         color: #9CA3AF;
     }
     
-    .dark-theme .stTabs [data-baseweb="tab"]:hover {
-        background-color: #374151;
-        color: #E5E7EB;
-    }
-    
-    .dark-theme .stTabs [data-baseweb="tab"][aria-selected="true"] {
-        background: linear-gradient(135deg, #2196F3 0%, #1976D2 50%, #1565C0 100%);
-        color: white;
-        box-shadow: 0 4px 12px rgba(33, 150, 243, 0.5), 0 2px 4px rgba(33, 150, 243, 0.4);
+    .dark-theme div[role="radiogroup"] label:hover {
+        background-color: rgba(255,255,255,0.1);
     }
     
     /* Loading State */
@@ -419,6 +434,24 @@ def _file_bytes(file) -> Optional[bytes]:
         return None
     return file.getvalue()
 
+def fix_invalid_numeric_strings(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Convert columns containing mixed numeric + text values into clean numeric columns.
+    Invalid numeric strings become NaN.
+    """
+    df = df.copy()
+    for col in df.columns:
+        try:
+            # Try converting the entire column to numeric (coerce invalid → NaN)
+            converted = pd.to_numeric(df[col], errors="coerce")
+            # If at least some values converted to numbers, treat column as numeric
+            if converted.notna().sum() > 0:
+                df[col] = converted
+        except Exception:
+            # If any unexpected error, skip conversion for this column
+            continue
+    return df
+
 @st.cache_data(show_spinner=False)
 def load_dataframe(file_bytes: Optional[bytes], filename: Optional[str]) -> Optional[pd.DataFrame]:
     if not file_bytes or not filename:
@@ -442,28 +475,13 @@ def load_dataframe(file_bytes: Optional[bytes], filename: Optional[str]) -> Opti
         else:
             st.error("❌ Unsupported file type. Use CSV, Excel, or Parquet.")
             return None
+            
+        if df is not None and not df.empty:
+            df = fix_invalid_numeric_strings(df)
+            
     except Exception as e:
         handle_error(e, "File Loading")
         return None
-    return df
-
-def fix_invalid_numeric_strings(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Convert columns containing mixed numeric + text values into clean numeric columns.
-    Invalid numeric strings become NaN.
-    This should be run immediately after loading the dataframe but before compressing types.
-    """
-    df = df.copy()
-    for col in df.columns:
-        try:
-            # Try converting the entire column to numeric (coerce invalid → NaN)
-            converted = pd.to_numeric(df[col], errors="coerce")
-            # If at least some values converted to numbers, treat column as numeric
-            if converted.notna().sum() > 0:
-                df[col] = converted
-        except Exception:
-            # If any unexpected error, skip conversion for this column
-            continue
     return df
 
 def coerce_datetime(df: pd.DataFrame, dt_col: str, dayfirst: bool) -> pd.DataFrame:
@@ -589,12 +607,10 @@ if 'df_filtered' not in st.session_state:
 
 # ==================== Main Header ====================
 
-# NEW: Conditionally display the title only after a file has been uploaded (or is about to be processed)
 if st.session_state.get('uploaded_file') is not None:
     st.markdown('<div class="main-title">📊 Data Insights Hub</div>', unsafe_allow_html=True)
     st.markdown('<div class="subtitle">Professional time-series data exploration and visualization platform</div>', unsafe_allow_html=True)
 else:
-    # If no file is uploaded, the main title will be hidden, and the landing page HTML below will handle the welcome message.
     pass
 
 # ==================== Sidebar ====================
@@ -602,33 +618,32 @@ else:
 with st.sidebar:
     st.markdown("### 📁 Data Source")
     
-    # Initialize uploaded_file in session state if not exists
     if 'uploaded_file' not in st.session_state:
         st.session_state['uploaded_file'] = None
     
-    # Determine if expander should be expanded
     expand_upload = st.session_state['uploaded_file'] is None
     
     with st.expander("📂 Upload File", expanded=expand_upload):
         st.info("👆 Click 'Browse files' below to upload your data")
         
-        uploaded_file = st.file_uploader(
+        uploaded_file_sidebar = st.file_uploader(
             "Choose a file",
             type=["csv", "xlsx", "xls", "parquet"],
             help="Supported formats: CSV, Excel, Parquet. Max size: 200 MB",
             key="file_uploader"
         )
         
-        # Update session state
-        if uploaded_file is not None:
-            st.session_state['uploaded_file'] = uploaded_file
-            file_size_mb = len(uploaded_file.getvalue()) / (1024 * 1024)
+        if uploaded_file_sidebar is not None:
+            st.session_state['uploaded_file'] = uploaded_file_sidebar
+            file_size_mb = len(uploaded_file_sidebar.getvalue()) / (1024 * 1024)
             if file_size_mb > 200:
                 st.error(f"❌ File too large ({file_size_mb:.1f} MB). Maximum: 200 MB")
                 st.stop()
             else:
-                st.success(f"✅ {uploaded_file.name}")
+                st.success(f"✅ {uploaded_file_sidebar.name}")
                 st.caption(f"📦 Size: {file_size_mb:.2f} MB")
+        elif st.session_state['uploaded_file'] is not None:
+             st.caption(f"✅ Using: {st.session_state['uploaded_file'].name}")
         else:
             st.caption("💡 Supported: CSV, Excel (.xlsx, .xls), Parquet")
 
@@ -636,7 +651,6 @@ with st.sidebar:
 df_raw = None
 uploaded_file = None
 
-# Check if file was uploaded from landing page or sidebar
 if 'uploaded_file' in st.session_state and st.session_state['uploaded_file'] is not None:
     uploaded_file = st.session_state['uploaded_file']
 
@@ -648,9 +662,6 @@ try:
         with st.spinner('📂 Loading data...'):
             df_raw = load_dataframe(_bytes, file_name)
             if df_raw is not None:
-                # 🛠️ FIX APPLIED: Clean mixed numeric/text columns BEFORE type compression
-                df_raw = fix_invalid_numeric_strings(df_raw)
-
                 st.sidebar.success(f"✅ Loaded {len(df_raw):,} rows")
 except Exception as e:
     if uploaded_file is not None:
@@ -668,7 +679,6 @@ if df_raw is None or df_raw.empty:
     </div>
     """, unsafe_allow_html=True)
     
-    # Central Upload Area
     col1, col2, col3 = st.columns([1, 2, 1])
     
     with col2:
@@ -691,7 +701,6 @@ if df_raw is None or df_raw.empty:
         
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # File uploader with better styling
         uploaded_file_landing = st.file_uploader(
             "Choose a file",
             type=["csv", "xlsx", "xls", "parquet"],
@@ -705,14 +714,12 @@ if df_raw is None or df_raw.empty:
             if file_size_mb > 200:
                 st.error(f"❌ File too large ({file_size_mb:.1f} MB). Maximum: 200 MB")
             else:
-                # Store in session state and rerun
                 st.session_state['uploaded_file'] = uploaded_file_landing
                 st.success(f"✅ File uploaded: {uploaded_file_landing.name}")
                 with st.spinner("🔄 Loading data..."):
-                    time.sleep(0.5)  # Brief pause for visual feedback
+                    time.sleep(0.5)
                 st.rerun()
     
-    # Features Section
     st.markdown("<br><br>", unsafe_allow_html=True)
     
     st.markdown("""
@@ -767,7 +774,6 @@ if df_raw is None or df_raw.empty:
         </div>
         """, unsafe_allow_html=True)
     
-    # Requirements Section
     st.markdown("<br><br>", unsafe_allow_html=True)
     
     with st.expander("📋 File Requirements & Supported Formats", expanded=False):
@@ -802,7 +808,6 @@ if df_raw is None or df_raw.empty:
             ```
             """)
     
-    # Sample Data Option
     st.markdown("<br>", unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -815,19 +820,14 @@ file_hash = hashlib.sha256(_bytes).hexdigest() if _bytes else None
 
 # ==================== Settings & Configuration ====================
 
-# 🛠️ UI FIX: Create a container for filters here, so they APPEAR above Settings
-# But we execute Settings first so the data exists for the filters
 filters_container = st.sidebar.container()
 
 with st.sidebar:
     st.markdown("---")
     
-    # WRAPPED IN EXPANDER
     with st.expander("⚙️ General Settings", expanded=False):
-        # Configuration Tabs
         config_tabs = st.tabs(["Data Config", "Display", "Advanced"])
         
-        # Settings Tab
         with config_tabs[0]:
             st.markdown("**Date/Time Configuration**")
             datetime_col_choice = st.selectbox(
@@ -843,7 +843,6 @@ with st.sidebar:
                 help="Enable if your dates use day-first format"
             )
         
-        # Display Tab
         with config_tabs[1]:
             use_dark = st.checkbox(
                 "🌙 Dark Theme",
@@ -854,7 +853,6 @@ with st.sidebar:
             normalize = st.checkbox("Normalize (Z-score)", help="Apply z-score normalization to data")
             log_scale = st.checkbox("Log Scale Y-axis", help="Use logarithmic scale for Y-axis")
         
-        # Advanced Tab
         with config_tabs[2]:
             if st.button("🔄 Reset All Settings"):
                 st.session_state.clear()
@@ -904,14 +902,11 @@ if use_dark:
 
 # ==================== Sidebar Filters & Controls ====================
 
-# 🛠️ UI FIX: Render filters into the top container
 with filters_container:
     st.markdown("---")
     st.markdown("### 🎯 Data Filters")
     
-    # WRAPPED IN EXPANDER
     with st.expander("⏱️ Date-Time & Processing", expanded=False):
-        # Date Range
         min_date, max_date = df.index.min().date(), df.index.max().date()
         
         col1, col2 = st.columns(2)
@@ -930,7 +925,6 @@ with filters_container:
                 max_value=max_date
             )
             
-        # Data Processing
         st.markdown("---")
         st.markdown("**🧹 Data Processing**")
         missing_strategy = st.selectbox(
@@ -958,7 +952,6 @@ with filters_container:
             help="Limit number of points for performance"
         )
     
-    # Advanced Filters
     with st.expander("🔍 Advanced Filters"):
         filter_count = st.number_input(
             "Number of filters",
@@ -989,7 +982,6 @@ with filters_container:
                 if operator and value is not None:
                     filters.append((filter_param, operator, value))
     
-    # Events & Annotations
     with st.expander("📍 Events & Annotations"):
         col1, col2 = st.columns(2)
         with col1:
@@ -1026,7 +1018,6 @@ with filters_container:
         if st.session_state.events:
             st.caption(f"📍 {len(st.session_state.events)} event(s) defined")
     
-    # Status Footer
     st.markdown("---")
     filters_tuple = tuple(filters)
     if filters_tuple:
@@ -1087,20 +1078,28 @@ if recompute_filtered:
 else:
     df_filtered = st.session_state['df_filtered']
 
-# Performance Warning
 if len(df_filtered) > 100000:
     st.warning(f"⚠️ Large dataset ({len(df_filtered):,} rows). Consider resampling or filtering for better performance.")
 
-# ==================== Main Tabs ====================
+# ==================== Main Navigation (Replaces Tabs) ====================
 
-tab1, tab2, tab3, tab4 = st.tabs(["📋 Overview", "📊 Visualize", "🚨 Anomaly Detection", "📤 Export"])
+nav_options = ["📋 Overview", "📊 Visualize", "🚨 Anomaly Detection", "📤 Export"]
+
+selected_view = st.radio(
+    "Navigation",
+    options=nav_options,
+    horizontal=True,
+    label_visibility="collapsed",
+    key="navigation_selection" 
+)
+
+st.markdown("---")
 
 # ==================== TAB 1: Overview ====================
 
-with tab1:
+if selected_view == "📋 Overview":
     st.markdown('<div class="section-header">Dataset Overview</div>', unsafe_allow_html=True)
     
-    # Key Metrics
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
@@ -1141,7 +1140,6 @@ with tab1:
     
     st.markdown("---")
     
-    # Data Preview with Search
     col1, col2 = st.columns([3, 1])
     with col1:
         st.markdown("### 📄 Data Preview")
@@ -1160,7 +1158,6 @@ with tab1:
     
     st.markdown("---")
     
-    # Column Information
     st.markdown("### 📊 Column Information")
     
     col1, col2 = st.columns(2)
@@ -1184,7 +1181,6 @@ with tab1:
         else:
             st.info("No categorical columns detected")
     
-    # Quick Stats
     if num_cols:
         st.markdown("---")
         st.markdown("### 📈 Quick Statistics")
@@ -1199,8 +1195,7 @@ with tab1:
 
 # ==================== TAB 2: Visualize ====================
 
-with tab2:
-    # Parameter Selection at the top of Visualize tab
+elif selected_view == "📊 Visualize":
     st.markdown("### 📊 Select Parameters")
     selected_params = st.multiselect(
         "Choose parameters to visualize",
@@ -1219,14 +1214,12 @@ with tab2:
             "Select one or more parameters from the sidebar to begin visualization"
         )
     else:
-        # Chart Controls
         col1, col2, col3 = st.columns([1, 1, 1])
         with col1:
-            # Custom styled label with larger font (24px)
             st.markdown('<p style="font-size: 24px; font-weight: 700; margin-bottom: 5px; color: #1F2A44;">📊 Visualization Type</p>', unsafe_allow_html=True)
             
             chart_choice = st.selectbox(
-                "Visualization Type", # This is now the hidden internal label
+                "Visualization Type",
                 [
                     "Time Series Trend",
                     "Correlation Heatmap",
@@ -1242,7 +1235,7 @@ with tab2:
                     "PACF Plot"
                 ],
                 index=0,
-                label_visibility="collapsed" # Hides the default small label
+                label_visibility="collapsed"
             )
         
         with col2:
@@ -1258,7 +1251,6 @@ with tab2:
         
         st.markdown("---")
         
-        # ========== TIME SERIES TREND ==========
         if chart_choice == "Time Series Trend":
             if resample_freq is None:
                 keep_idx = thin_index(df_filtered.index, downsample_limit)
@@ -1278,11 +1270,10 @@ with tab2:
                     rows=rows,
                     cols=1,
                     shared_xaxes=True,
-                    vertical_spacing=0.1,  # Increased spacing slightly for the margin lines
+                    vertical_spacing=0.1,
                     subplot_titles=selected_params
                 )
                 
-                # Define a border color based on theme (slightly darker than grid)
                 border_color = "#4B5563" if use_dark else "#D1D5DB"
                 
                 for i, col in enumerate(selected_params, start=1):
@@ -1308,33 +1299,24 @@ with tab2:
                         row=i, col=1
                     )
                     
-                    # --- NEW: Add Margin Line (Axis Border) ---
-                    # This forces a line at the bottom of every subplot
                     fig.update_xaxes(
                         showline=True,
                         linewidth=1,
                         linecolor=border_color, 
-                        mirror=False,      # Only draw bottom line (separator)
-                        showticklabels=(i == rows), # Only show labels on bottom-most chart
+                        mirror=False,
+                        showticklabels=(i == rows),
                         row=i, col=1
                     )
                 
-                # Add events
                 for evt in st.session_state.events:
-                    # Draw vertical lines on the plot area
                     fig.add_vline(
                         x=evt["time"],
                         line=dict(color=evt["color"], width=2, dash="dash"),
                     )
 
-                # --- SHARED INTERACTION LOGIC ---
-                # 1. Identify the bottom-most axis (the master)
                 master_xaxis = 'x' if rows == 1 else f'x{rows}'
-
-                # 2. Bind all traces to this master axis for unified hover
                 fig.update_traces(xaxis=master_xaxis)
 
-                # 3. Configure the master axis spike line (Vertical Crosshair)
                 fig.update_xaxes(
                     showspikes=True,
                     spikemode="across",
@@ -1343,7 +1325,7 @@ with tab2:
                     spikecolor=FONT_COLOR,
                     spikethickness=1,
                     spikedash="dashdot",
-                    row=rows, col=1 # Apply specifically to the master axis
+                    row=rows, col=1
                 )
                 
                 fig.update_layout(
@@ -1359,24 +1341,17 @@ with tab2:
                 
                 st.plotly_chart(fig, width="stretch")
             
-            else:  # Overlay
+            else:
                 fig = go.Figure()
-                
-                # We need to manage the layout dictionary dynamically to handle N axes
                 layout_updates = {}
                 
-                # 1. Reserve space on the sides for multiple axes if there are many
-                # Shrink the X-axis domain slightly to make room for axes on left/right
                 if len(selected_params) > 2:
                     layout_updates["xaxis"] = dict(domain=[0.1, 0.9])
                 
                 for i, col in enumerate(selected_params):
                     color = color_cycle[i % len(color_cycle)]
-                    
-                    # Determine axis name (y, y2, y3, ...)
                     yaxis_name = "y" if i == 0 else f"y{i+1}"
                     
-                    # Add Trace assigned to specific y-axis
                     fig.add_trace(
                         go.Scatter(
                             x=df_plot.index,
@@ -1384,36 +1359,29 @@ with tab2:
                             mode="lines",
                             name=col,
                             line=dict(color=color, width=2),
-                            yaxis=yaxis_name,  # <--- Assign trace to its own axis
+                            yaxis=yaxis_name,
                             hovertemplate="%{x|%Y-%m-%d %H:%M:%S}<br>%{y:.2f}<extra>" + col + "</extra>"
                         )
                     )
                     
-                    # Configure the Axis
-                    # Primary axis (i=0) is standard.
-                    # Secondary axes (i>0) must overlay 'y' and be anchored/positioned.
                     axis_config = dict(
                         title=dict(text=(f"log({col})" if log_scale else col), font=dict(color=color)),
                         tickfont=dict(color=color),
                         type=("log" if log_scale else "linear"),
-                        showgrid=(True if i == 0 else False), # Only show grid for primary to avoid clutter
+                        showgrid=(True if i == 0 else False),
                     )
                     
                     if i > 0:
                         axis_config.update(dict(
-                            overlaying="y",    # Superimpose on the first plot
-                            anchor="free",     # Allow it to float (needed for >2 axes)
-                            autoshift=True,    # Automatically shift sideways to avoid overlap
+                            overlaying="y",
+                            anchor="free",
+                            autoshift=True,
                         ))
-                        # Alternate sides: Even indices (0, 2...) Left, Odd (1, 3...) Right
-                        # Since 0 is primary (Left), 1 is Right. 2 goes Left (autoshifted), 3 Right (autoshifted).
                         axis_config["side"] = "right" if i % 2 != 0 else "left"
                         
-                    # Add to layout updates dictionary
                     key = "yaxis" if i == 0 else f"yaxis{i+1}"
                     layout_updates[key] = axis_config
 
-                # Add events
                 for evt in st.session_state.events:
                     fig.add_vline(
                         x=evt["time"],
@@ -1422,14 +1390,13 @@ with tab2:
                         annotation_position="top"
                     )
                 
-                # Update layout with the dynamic axis configurations
                 fig.update_layout(
                     template=TEMPLATE,
                     paper_bgcolor=PAPER_BG,
                     plot_bgcolor=PLOT_BG,
                     font=dict(color=FONT_COLOR),
                     title="Multi-Parameter Time Series (Independent Scales)",
-                    height=600,  # Increased height for better visibility
+                    height=600,
                     hovermode="x unified",
                     legend=dict(
                         orientation="h",
@@ -1438,12 +1405,11 @@ with tab2:
                         xanchor="center",
                         x=0.5
                     ),
-                    **layout_updates  # <--- Unpack dynamic axis config here
+                    **layout_updates
                 )
                 
                 st.plotly_chart(fig, width="stretch")
         
-        # ========== CORRELATION HEATMAP ==========
         elif chart_choice == "Correlation Heatmap":
             if len(selected_params) < 2:
                 st.info("ℹ️ Select at least 2 parameters for correlation analysis")
@@ -1474,7 +1440,6 @@ with tab2:
                     fig.update_layout(height=600)
                     st.plotly_chart(fig, width="stretch")
                     
-                    # Correlation insights
                     st.markdown("### 🔍 Correlation Insights")
                     
                     pairs = []
@@ -1504,7 +1469,6 @@ with tab2:
                         else:
                             st.caption("None found")
         
-        # ========== HISTOGRAM ==========
         elif chart_choice == "Histogram":
             bins = st.slider("Number of bins", 10, 100, 50)
             
@@ -1519,14 +1483,12 @@ with tab2:
                         histnorm="probability density"
                     )
                     
-                    # Add KDE
                     kde_fig = ff.create_distplot([series.values], [col], show_hist=False, show_rug=False)
                     fig.add_trace(kde_fig.data[0])
                     
                     fig.update_layout(height=400, showlegend=True)
                     st.plotly_chart(fig, width="stretch")
         
-        # ========== BOX PLOT ==========
         elif chart_choice == "Box Plot":
             for col in selected_params:
                 series = pd.to_numeric(df_filtered[col], errors="coerce").dropna()
@@ -1540,7 +1502,6 @@ with tab2:
                     fig.update_layout(height=400)
                     st.plotly_chart(fig, width="stretch")
         
-        # ========== SCATTER + CLUSTERING ==========
         elif chart_choice == "Scatter + Clustering":
             if len(selected_params) < 2:
                 st.info("ℹ️ Select at least 2 parameters for scatter plot")
@@ -1573,7 +1534,6 @@ with tab2:
                     fig.update_layout(height=500)
                     st.plotly_chart(fig, width="stretch")
         
-        # ========== PCA ==========
         elif chart_choice == "PCA (2D)":
             if len(selected_params) < 2:
                 st.info("ℹ️ Select at least 2 parameters for PCA")
@@ -1597,7 +1557,6 @@ with tab2:
                 fig.update_layout(height=500)
                 st.plotly_chart(fig, width="stretch")
         
-        # ========== MOVING AVERAGE ==========
         elif chart_choice == "Moving Average":
             window_opts = ["30s", "1min", "5min", "15min", "1H", "6H", "12H", "1D", "7D"]
             window = st.selectbox("Rolling Window", options=window_opts, index=2)
@@ -1620,7 +1579,6 @@ with tab2:
                 series = df_num[col]
                 ma = series.rolling(window=window, min_periods=1).mean()
                 
-                # Original
                 fig.add_trace(
                     go.Scatter(
                         x=series.index,
@@ -1633,7 +1591,6 @@ with tab2:
                     row=i, col=1
                 )
                 
-                # Moving average
                 fig.add_trace(
                     go.Scatter(
                         x=ma.index,
@@ -1662,9 +1619,6 @@ with tab2:
             
             st.plotly_chart(fig, width="stretch")
         
-        
-
-        # ========== ROLLING CORRELATION ==========
         elif chart_choice == "Rolling Correlation":
             if len(selected_params) != 2:
                 st.warning("Select exactly 2 parameters for rolling correlation.")
@@ -1679,7 +1633,6 @@ with tab2:
                                   template=TEMPLATE, height=400)
                 st.plotly_chart(fig, width="stretch")
 
-        # ========== CROSS-CORRELATION ==========
         elif chart_choice == "Cross-Correlation (Lag)":
             if len(selected_params) != 2:
                 st.warning("Select exactly 2 parameters for cross-correlation.")
@@ -1695,18 +1648,15 @@ with tab2:
                                   template=TEMPLATE, xaxis_title="Lag", yaxis_title="Correlation", height=450)
                 st.plotly_chart(fig, width="stretch")
 
-        # ========== DECOMPOSITION ==========
         elif chart_choice == "Decomposition":
             if len(selected_params) != 1:
                 st.warning("Select exactly 1 parameter for decomposition.")
             else:
                 series = pd.to_numeric(df_filtered[selected_params[0]], errors="coerce").dropna()
 
-                # Ensure datetime index
                 s = series.copy()
                 s.index = pd.to_datetime(s.index)
 
-                # Infer or enforce frequency
                 freq = s.index.inferred_freq
                 if freq is None:
                     try:
@@ -1715,10 +1665,7 @@ with tab2:
                         st.error("Time index is irregular. Please resample to a fixed frequency (e.g., 1 min) before decomposition.")
                         st.stop()
 
-                # Apply frequency
                 s = s.asfreq(freq)
-
-                # Fill missing values created by asfreq()
                 s = s.interpolate(method="time").bfill().ffill()
 
                 try:
@@ -1735,7 +1682,6 @@ with tab2:
                 except Exception as e:
                     st.error(f"Decomposition failed: {e}")
 
-        # ========== ACF PLOT ==========
         elif chart_choice == "ACF Plot":
             if len(selected_params) != 1:
                 st.warning("Select only 1 parameter for ACF.")
@@ -1745,7 +1691,6 @@ with tab2:
                 plot_acf(series, ax=ax, lags=50)
                 st.pyplot(fig)
 
-        # ========== PACF PLOT ==========
         elif chart_choice == "PACF Plot":
             if len(selected_params) != 1:
                 st.warning("Select only 1 parameter for PACF.")
@@ -1755,7 +1700,6 @@ with tab2:
                 plot_pacf(series, ax=ax, lags=50, method='ywm')
                 st.pyplot(fig)
 
-# Stats Table
         if show_stats and selected_params:
             st.markdown("---")
             st.markdown("### 📊 Descriptive Statistics")
@@ -1768,10 +1712,9 @@ with tab2:
 
 # ==================== TAB 3: Anomaly Detection ====================
 
-with tab3:
+elif selected_view == "🚨 Anomaly Detection":
     st.markdown('<div class="section-header">Anomaly Detection</div>', unsafe_allow_html=True)
     
-    # Parameter Selection for Anomaly Detection
     selected_params_anomaly = st.multiselect(
         "Choose parameters for anomaly detection",
         options=list(df.columns),
@@ -1832,7 +1775,6 @@ with tab3:
                 
                 fig = go.Figure()
                 
-                # Normal data
                 fig.add_trace(
                     go.Scatter(
                         x=s.index,
@@ -1843,7 +1785,6 @@ with tab3:
                     )
                 )
                 
-                # Anomalies
                 fig.add_trace(
                     go.Scatter(
                         x=s.index[mask_anom],
@@ -1863,7 +1804,6 @@ with tab3:
                 
                 st.plotly_chart(fig, width="stretch")
                 
-                # Anomaly summary
                 num_anomalies = mask_anom.sum()
                 pct_anomalies = (num_anomalies / len(s)) * 100
                 
@@ -1881,7 +1821,7 @@ with tab3:
 
 # ==================== TAB 4: Export ====================
 
-with tab4:
+elif selected_view == "📤 Export":
     st.markdown('<div class="section-header">Export Options</div>', unsafe_allow_html=True)
     
     col1, col2 = st.columns(2)
@@ -1969,7 +1909,6 @@ with tab4:
     
     st.markdown("---")
     
-    # Export Summary
     st.markdown("### 📋 Export Summary")
     
     summary_cols = st.columns(4)
@@ -1987,7 +1926,6 @@ with tab4:
     with summary_cols[3]:
         st.metric("Date Range", f"{(df_filtered.index.max() - df_filtered.index.min()).days} days")
     
-    # Applied Filters Summary
     if filters_tuple or resample_freq or missing_strategy != "No action":
         st.markdown("---")
         st.markdown("### 🔍 Applied Processing")
@@ -2034,7 +1972,6 @@ with st.sidebar:
         if len(df_filtered) > 50000:
             st.warning("⚠️ Consider resampling for better performance")
 
-# --- NEW: About Section ---
     with st.expander("ℹ️ About", expanded=False):
         st.markdown(
             """
@@ -2043,4 +1980,3 @@ with st.sidebar:
             **Built by - Jeevan A. Jadhav**
             """
         )
-    # --- END NEW Section ---
