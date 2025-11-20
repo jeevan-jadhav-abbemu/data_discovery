@@ -813,43 +813,45 @@ file_hash = hashlib.sha256(_bytes).hexdigest() if _bytes else None
 with st.sidebar:
     st.markdown("---")
     
-    # Configuration Tabs
-    config_tabs = st.tabs(["⚙️ Settings", "🎨 Display", "🔧 Advanced"])
-    
-    # Settings Tab
-    with config_tabs[0]:
-        st.markdown("**Date/Time Configuration**")
-        datetime_col_choice = st.selectbox(
-            "Datetime column",
-            options=[None] + list(df_raw.columns),
-            index=0,
-            help="Select the column to use as the time index"
-        )
+    # WRAPPED IN EXPANDER
+    with st.expander("⚙️ General Settings", expanded=False):
+        # Configuration Tabs
+        config_tabs = st.tabs(["Data Config", "Display", "Advanced"])
         
-        dayfirst_choice = st.checkbox(
-            "Day-first format (DD/MM/YYYY)",
-            value=True,
-            help="Enable if your dates use day-first format"
-        )
-    
-    # Display Tab
-    with config_tabs[1]:
-        use_dark = st.checkbox(
-            "🌙 Dark Theme",
-            value=st.session_state["user_prefs"]["dark_theme"]
-        )
-        st.session_state["user_prefs"]["dark_theme"] = use_dark
+        # Settings Tab
+        with config_tabs[0]:
+            st.markdown("**Date/Time Configuration**")
+            datetime_col_choice = st.selectbox(
+                "Datetime column",
+                options=[None] + list(df_raw.columns),
+                index=0,
+                help="Select the column to use as the time index"
+            )
+            
+            dayfirst_choice = st.checkbox(
+                "Day-first format (DD/MM/YYYY)",
+                value=True,
+                help="Enable if your dates use day-first format"
+            )
         
-        normalize = st.checkbox("Normalize (Z-score)", help="Apply z-score normalization to data")
-        log_scale = st.checkbox("Log Scale Y-axis", help="Use logarithmic scale for Y-axis")
-    
-    # Advanced Tab
-    with config_tabs[2]:
-        if st.button("🔄 Reset All Settings"):
-            st.session_state.clear()
-            st.rerun()
+        # Display Tab
+        with config_tabs[1]:
+            use_dark = st.checkbox(
+                "🌙 Dark Theme",
+                value=st.session_state["user_prefs"]["dark_theme"]
+            )
+            st.session_state["user_prefs"]["dark_theme"] = use_dark
+            
+            normalize = st.checkbox("Normalize (Z-score)", help="Apply z-score normalization to data")
+            log_scale = st.checkbox("Log Scale Y-axis", help="Use logarithmic scale for Y-axis")
         
-        st.caption("💾 Settings are automatically saved")
+        # Advanced Tab
+        with config_tabs[2]:
+            if st.button("🔄 Reset All Settings"):
+                st.session_state.clear()
+                st.rerun()
+            
+            st.caption("💾 Settings are automatically saved")
 
 # Process dataframe
 recompute_df = False
@@ -897,67 +899,54 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### 🎯 Data Filters")
     
-    # Date Range
-    min_date, max_date = df.index.min().date(), df.index.max().date()
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        start_date = st.date_input(
-            "Start",
-            value=min_date,
-            min_value=min_date,
-            max_value=max_date
+    # WRAPPED IN EXPANDER
+    with st.expander("⏱️ Time & Processing", expanded=True):
+        # Date Range
+        min_date, max_date = df.index.min().date(), df.index.max().date()
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            start_date = st.date_input(
+                "Start",
+                value=min_date,
+                min_value=min_date,
+                max_value=max_date
+            )
+        with col2:
+            end_date = st.date_input(
+                "End",
+                value=max_date,
+                min_value=min_date,
+                max_value=max_date
+            )
+            
+        # Data Processing
+        st.markdown("---")
+        st.markdown("**🧹 Data Processing**")
+        missing_strategy = st.selectbox(
+            "Missing Values",
+            ["No action", "Drop missing rows", "Forward fill", "Backward fill", "Interpolate (time)"],
+            help="How to handle missing data points"
         )
-    with col2:
-        end_date = st.date_input(
-            "End",
-            value=max_date,
-            min_value=min_date,
-            max_value=max_date
+        
+        resample_options = {
+            "None": None, "1 sec": "1s", "5 sec": "5s", "10 sec": "10s",
+            "1 min": "1min", "5 min": "5min", "10 min": "10min", "30 min": "30min",
+            "1 hour": "1H", "1 day": "1D", "1 week": "1W", "1 month": "1M"
+        }
+        resample_label = st.selectbox("Resample Frequency", list(resample_options.keys()))
+        resample_freq = resample_options[resample_label]
+    
+        max_points_disabled = resample_freq is not None
+        downsample_limit = st.number_input(
+            "Max Plot Points",
+            min_value=1000,
+            max_value=200000,
+            value=50000,
+            step=5000,
+            disabled=max_points_disabled,
+            help="Limit number of points for performance"
         )
-    
-    # Data Processing
-    st.markdown("**🧹 Data Processing**")
-    
-    missing_strategy = st.selectbox(
-        "Missing Values",
-        ["No action", "Drop missing rows", "Forward fill", "Backward fill", "Interpolate (time)"],
-        help="How to handle missing data points"
-    )
-    
-    resample_options = {
-        "None": None,
-        "1 sec": "1s",
-        "5 sec": "5s",
-        "10 sec": "10s",
-        "30 sec": "30s",
-        "1 min": "1min",
-        "5 min": "5min",
-        "15 min": "15min",
-        "1 hour": "1h",
-        "6 hours": "6h",
-        "12 hours": "12h",
-        "1 day": "1D"
-    }
-    
-    resample_label = st.selectbox(
-        "Resample",
-        list(resample_options.keys()),
-        index=0,
-        help="Aggregate data by time intervals"
-    )
-    resample_freq = resample_options[resample_label]
-    
-    max_points_disabled = resample_freq is not None
-    downsample_limit = st.number_input(
-        "Max Plot Points",
-        min_value=1000,
-        max_value=200000,
-        value=50000,
-        step=5000,
-        disabled=max_points_disabled,
-        help="Limit number of points for performance"
-    )
     
     # Advanced Filters
     with st.expander("🔍 Advanced Filters"):
