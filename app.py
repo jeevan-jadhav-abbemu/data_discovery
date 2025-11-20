@@ -810,6 +810,10 @@ file_hash = hashlib.sha256(_bytes).hexdigest() if _bytes else None
 
 # ==================== Settings & Configuration ====================
 
+# 🛠️ UI FIX: Create a container for filters here, so they APPEAR above Settings
+# But we execute Settings first so the data exists for the filters
+filters_container = st.sidebar.container()
+
 with st.sidebar:
     st.markdown("---")
     
@@ -895,7 +899,8 @@ if use_dark:
 
 # ==================== Sidebar Filters & Controls ====================
 
-with st.sidebar:
+# 🛠️ UI FIX: Render filters into the top container
+with filters_container:
     st.markdown("---")
     st.markdown("### 🎯 Data Filters")
     
@@ -1265,9 +1270,12 @@ with tab2:
                     rows=rows,
                     cols=1,
                     shared_xaxes=True,
-                    vertical_spacing=0.02,
+                    vertical_spacing=0.1,  # Increased spacing slightly for the margin lines
                     subplot_titles=selected_params
                 )
+                
+                # Define a border color based on theme (slightly darker than grid)
+                border_color = "#4B5563" if use_dark else "#D1D5DB"
                 
                 for i, col in enumerate(selected_params, start=1):
                     color = color_cycle[(i - 1) % len(color_cycle)]
@@ -1278,7 +1286,7 @@ with tab2:
                             mode="lines",
                             name=col,
                             line=dict(color=color, width=2),
-                            hovertemplate="%{y:.2f}" # Simplified template for unified view
+                            hovertemplate="%{y:.2f}"
                         ),
                         row=i, col=1
                     )
@@ -1291,36 +1299,44 @@ with tab2:
                         type=("log" if log_scale else "linear"),
                         row=i, col=1
                     )
+                    
+                    # --- NEW: Add Margin Line (Axis Border) ---
+                    # This forces a line at the bottom of every subplot
+                    fig.update_xaxes(
+                        showline=True,
+                        linewidth=1,
+                        linecolor=border_color, 
+                        mirror=False,      # Only draw bottom line (separator)
+                        showticklabels=(i == rows), # Only show labels on bottom-most chart
+                        row=i, col=1
+                    )
                 
-                # Add events (Vertical lines for annotations)
+                # Add events
                 for evt in st.session_state.events:
-                    # We use add_vline which draws on the plot area
+                    # Draw vertical lines on the plot area
                     fig.add_vline(
                         x=evt["time"],
                         line=dict(color=evt["color"], width=2, dash="dash"),
                     )
 
-                # --- KEY FIX START: SHARED INTERACTION AXIS ---
-                # 1. Identify the bottom-most x-axis (e.g., 'x2', 'x3'). 
-                #    This axis has the tick labels and spans the full width.
+                # --- SHARED INTERACTION LOGIC ---
+                # 1. Identify the bottom-most axis (the master)
                 master_xaxis = 'x' if rows == 1 else f'x{rows}'
 
-                # 2. Force ALL traces to use this single x-axis.
-                #    This ensures they all respond to the same hover event simultaneously.
-                #    They will stay stacked because they still use different Y-axes.
+                # 2. Bind all traces to this master axis for unified hover
                 fig.update_traces(xaxis=master_xaxis)
 
-                # 3. Configure the master axis to draw a full-height line (spike)
+                # 3. Configure the master axis spike line (Vertical Crosshair)
                 fig.update_xaxes(
                     showspikes=True,
-                    spikemode="across",    # Draws line across the entire plot container
+                    spikemode="across",
                     spikesnap="cursor",
                     showline=True,
                     spikecolor=FONT_COLOR,
                     spikethickness=1,
-                    spikedash="dashdot"
+                    spikedash="dash",
+                    row=rows, col=1 # Apply specifically to the master axis
                 )
-                # --- KEY FIX END ---
                 
                 fig.update_layout(
                     template=TEMPLATE,
@@ -1329,7 +1345,7 @@ with tab2:
                     font=dict(color=FONT_COLOR),
                     height=calculate_chart_height(rows, 250, 200),
                     margin=dict(l=60, r=40, t=50, b=60),
-                    hovermode="x unified", # Create the single unified tooltip box
+                    hovermode="x unified",
                     showlegend=False
                 )
                 
@@ -1338,8 +1354,21 @@ with tab2:
             else:  # Overlay
                 fig = go.Figure()
                 
+                # We need to manage the layout dictionary dynamically to handle N axes
+                layout_updates = {}
+                
+                # 1. Reserve space on the sides for multiple axes if there are many
+                # Shrink the X-axis domain slightly to make room for axes on left/right
+                if len(selected_params) > 2:
+                    layout_updates["xaxis"] = dict(domain=[0.1, 0.9])
+                
                 for i, col in enumerate(selected_params):
                     color = color_cycle[i % len(color_cycle)]
+                    
+                    # Determine axis name (y, y2, y3, ...)
+                    yaxis_name = "y" if i == 0 else f"y{i+1}"
+                    
+                    # Add Trace assigned to specific y-axis
                     fig.add_trace(
                         go.Scatter(
                             x=df_plot.index,
@@ -1347,10 +1376,35 @@ with tab2:
                             mode="lines",
                             name=col,
                             line=dict(color=color, width=2),
+                            yaxis=yaxis_name,  # <--- Assign trace to its own axis
                             hovertemplate="%{x|%Y-%m-%d %H:%M:%S}<br>%{y:.2f}<extra>" + col + "</extra>"
                         )
                     )
-                
+                    
+                    # Configure the Axis
+                    # Primary axis (i=0) is standard.
+                    # Secondary axes (i>0) must overlay 'y' and be anchored/positioned.
+                    axis_config = dict(
+                        title=dict(text=(f"log({col})" if log_scale else col), font=dict(color=color)),
+                        tickfont=dict(color=color),
+                        type=("log" if log_scale else "linear"),
+                        showgrid=(True if i == 0 else False), # Only show grid for primary to avoid clutter
+                    )
+                    
+                    if i > 0:
+                        axis_config.update(dict(
+                            overlaying="y",    # Superimpose on the first plot
+                            anchor="free",     # Allow it to float (needed for >2 axes)
+                            autoshift=True,    # Automatically shift sideways to avoid overlap
+                        ))
+                        # Alternate sides: Even indices (0, 2...) Left, Odd (1, 3...) Right
+                        # Since 0 is primary (Left), 1 is Right. 2 goes Left (autoshifted), 3 Right (autoshifted).
+                        axis_config["side"] = "right" if i % 2 != 0 else "left"
+                        
+                    # Add to layout updates dictionary
+                    key = "yaxis" if i == 0 else f"yaxis{i+1}"
+                    layout_updates[key] = axis_config
+
                 # Add events
                 for evt in st.session_state.events:
                     fig.add_vline(
@@ -1360,27 +1414,23 @@ with tab2:
                         annotation_position="top"
                     )
                 
+                # Update layout with the dynamic axis configurations
                 fig.update_layout(
                     template=TEMPLATE,
                     paper_bgcolor=PAPER_BG,
                     plot_bgcolor=PLOT_BG,
                     font=dict(color=FONT_COLOR),
-                    title="Multi-Parameter Time Series",
-                    height=500,
+                    title="Multi-Parameter Time Series (Independent Scales)",
+                    height=600,  # Increased height for better visibility
                     hovermode="x unified",
                     legend=dict(
                         orientation="h",
                         yanchor="bottom",
-                        y=1.02,
-                        xanchor="right",
-                        x=1
-                    )
-                )
-                
-                fig.update_xaxes(gridcolor=GRID_COLOR)
-                fig.update_yaxes(
-                    gridcolor=GRID_COLOR,
-                    type=("log" if log_scale else "linear")
+                        y=1.05,
+                        xanchor="center",
+                        x=0.5
+                    ),
+                    **layout_updates  # <--- Unpack dynamic axis config here
                 )
                 
                 st.plotly_chart(fig, width="stretch")
