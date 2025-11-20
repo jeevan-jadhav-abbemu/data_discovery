@@ -589,8 +589,13 @@ if 'df_filtered' not in st.session_state:
 
 # ==================== Main Header ====================
 
-st.markdown('<div class="main-title">📊 Data Insights Hub</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle">Professional time-series data exploration and visualization platform</div>', unsafe_allow_html=True)
+# NEW: Conditionally display the title only after a file has been uploaded (or is about to be processed)
+if st.session_state.get('uploaded_file') is not None:
+    st.markdown('<div class="main-title">📊 Data Insights Hub</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle">Professional time-series data exploration and visualization platform</div>', unsafe_allow_html=True)
+else:
+    # If no file is uploaded, the main title will be hidden, and the landing page HTML below will handle the welcome message.
+    pass
 
 # ==================== Sidebar ====================
 
