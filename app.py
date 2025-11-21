@@ -383,6 +383,19 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# ==================== Custom CSS for Sidebar Border ====================
+st.markdown(
+    """
+    <style>
+    /* Target the sidebar element by its data-testid */
+    section[data-testid="stSidebar"] {
+        border-right: 5px solid #0068C9; /* Blue border on the right (NEW) */
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+# =====================================================================
 # ==================== Helper Functions ====================
 
 LIGHT_TEMPLATE = "plotly_white"
@@ -623,7 +636,7 @@ with st.sidebar:
     
     expand_upload = st.session_state['uploaded_file'] is None
     
-    with st.expander("📂 Upload File", expanded=expand_upload):
+    with st.expander("📂 Upload File", expanded=False):
         st.info("👆 Click 'Browse files' below to upload your data")
         
         uploaded_file_sidebar = st.file_uploader(
@@ -668,39 +681,72 @@ except Exception as e:
         handle_error(e, "Data Loading")
 
 if df_raw is None or df_raw.empty:
-    # Enhanced Landing Page with Upload Option
     st.markdown("""
-    <div style="text-align: center; padding: 2rem 0;">
-        <div style="font-size: 80px; margin-bottom: 1rem;">📊</div>
-        <h2 style="color: #1F2A44; margin-bottom: 0.5rem;">Welcome to Data Insights Hub</h2>
-        <p style="color: #6B7280; font-size: 16px; margin-bottom: 2rem;">
-            Upload your dataset to begin exploring insights and visualizations
+    <div style="
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 1.5rem 1rem;
+        border-radius: 24px;
+        margin-bottom: 1rem;
+        box-shadow: 0 10px 40px rgba(102, 126, 234, 0.3);
+        text-align: center;
+    ">
+        <div style="font-size: 80px; margin-bottom: 1rem; animation: float 3s ease-in-out infinite;">📊</div>
+        <h1 style="
+            font-size: 48px;
+            font-weight: 800;
+            color: white;
+            margin-bottom: 1rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        ">Welcome to Data Insights Hub</h1>
+        <p style="
+            color: rgba(255,255,255,0.95);
+            font-size: 20px;
+            margin-bottom: 2rem;
+            font-weight: 400;
+        ">
+            Transform your time-series data into actionable insights with powerful visualizations and AI-driven analytics
         </p>
+        <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; margin-top: 2rem;">
+            <span style="
+                background: rgba(255,255,255,0.2);
+                padding: 8px 20px;
+                border-radius: 20px;
+                color: white;
+                font-size: 14px;
+                backdrop-filter: blur(10px);
+            ">✓ No coding required</span>
+            <span style="
+                background: rgba(255,255,255,0.2);
+                padding: 8px 20px;
+                border-radius: 20px;
+                color: white;
+                font-size: 14px;
+                backdrop-filter: blur(10px);
+            ">✓ Real-time processing</span>
+            <span style="
+                background: rgba(255,255,255,0.2);
+                padding: 8px 20px;
+                border-radius: 20px;
+                color: white;
+                font-size: 14px;
+                backdrop-filter: blur(10px);
+            ">✓ Enterprise-ready</span>
+        </div>
     </div>
+    
+    <style>
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+    </style>
     """, unsafe_allow_html=True)
     
+    # Enhanced Upload Section
     col1, col2, col3 = st.columns([1, 2, 1])
     
-    with col2:
-        st.markdown("""
-        <div style="
-            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
-            border: 2px dashed #2196F3;
-            border-radius: 16px;
-            padding: 3rem 2rem;
-            text-align: center;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        ">
-            <div style="font-size: 48px; margin-bottom: 1rem;">📁</div>
-            <h3 style="color: #1F2A44; margin-bottom: 1rem;">Upload Your Data File</h3>
-            <p style="color: #6B7280; margin-bottom: 1.5rem;">
-                Drag and drop your file here, or click to browse
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("<br>", unsafe_allow_html=True)
-        
+    with col2:      
+                
         uploaded_file_landing = st.file_uploader(
             "Choose a file",
             type=["csv", "xlsx", "xls", "parquet"],
@@ -712,7 +758,7 @@ if df_raw is None or df_raw.empty:
         if uploaded_file_landing is not None:
             file_size_mb = len(uploaded_file_landing.getvalue()) / (1024 * 1024)
             if file_size_mb > 200:
-                st.error(f"❌ File too large ({file_size_mb:.1f} MB). Maximum: 200 MB")
+                st.error(f"⚠️ File too large ({file_size_mb:.1f} MB). Maximum: 200 MB")
             else:
                 st.session_state['uploaded_file'] = uploaded_file_landing
                 st.success(f"✅ File uploaded: {uploaded_file_landing.name}")
@@ -720,11 +766,109 @@ if df_raw is None or df_raw.empty:
                     time.sleep(0.5)
                 st.rerun()
     
+    # How It Works Section
+    st.markdown("""
+    <div style="text-align: center; margin: 4rem 0 3rem 0;">
+        <h2 style="color: #1F2A44; font-size: 36px; font-weight: 700; margin-bottom: 0.5rem;">
+            How It Works
+        </h2>
+        <p style="color: #6B7280; font-size: 16px;">
+            Get started in three simple steps
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    steps_col1, steps_col2, steps_col3 = st.columns(3)
+    
+    with steps_col1:
+        st.markdown("""
+        <div style="text-align: center; padding: 2rem;">
+            <div style="
+                width: 80px;
+                height: 80px;
+                border-radius: 50%;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 32px;
+                font-weight: 700;
+                margin: 0 auto 1.5rem auto;
+                box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+            ">1</div>
+            <h4 style="color: #1F2A44; font-size: 20px; font-weight: 600; margin-bottom: 0.75rem;">
+                Upload Your Data
+            </h4>
+            <p style="color: #6B7280; font-size: 14px; line-height: 1.6;">
+                Import CSV, Excel, or Parquet files containing your time-series data
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with steps_col2:
+        st.markdown("""
+        <div style="text-align: center; padding: 2rem;">
+            <div style="
+                width: 80px;
+                height: 80px;
+                border-radius: 50%;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 32px;
+                font-weight: 700;
+                margin: 0 auto 1.5rem auto;
+                box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+            ">2</div>
+            <h4 style="color: #1F2A44; font-size: 20px; font-weight: 600; margin-bottom: 0.75rem;">
+                Explore & Visualize
+            </h4>
+            <p style="color: #6B7280; font-size: 14px; line-height: 1.6;">
+                Interact with powerful charts, correlations, and statistical analysis tools
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with steps_col3:
+        st.markdown("""
+        <div style="text-align: center; padding: 2rem;">
+            <div style="
+                width: 80px;
+                height: 80px;
+                border-radius: 50%;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 32px;
+                font-weight: 700;
+                margin: 0 auto 1.5rem auto;
+                box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+            ">3</div>
+            <h4 style="color: #1F2A44; font-size: 20px; font-weight: 600; margin-bottom: 0.75rem;">
+                Export Insights
+            </h4>
+            <p style="color: #6B7280; font-size: 14px; line-height: 1.6;">
+                Download filtered data, charts, and reports in multiple formats
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+    
     st.markdown("<br><br>", unsafe_allow_html=True)
     
+    # Enhanced Key Features Section
     st.markdown("""
-    <div style="text-align: center; margin: 3rem 0 2rem 0;">
-        <h3 style="color: #1F2A44;">🎯 Key Features</h3>
+    <div style="text-align: center; margin: 4rem 0 2rem 0;">
+        <h2 style="color: #1F2A44; font-size: 36px; font-weight: 700;">
+            🎯 Powerful Features
+        </h2>
+        <p style="color: #6B7280; font-size: 16px; margin-top: 0.5rem;">
+            Everything you need for comprehensive data analysis
+        </p>
     </div>
     """, unsafe_allow_html=True)
     
@@ -732,50 +876,167 @@ if df_raw is None or df_raw.empty:
     
     with col1:
         st.markdown("""
-        <div class="tile">
-            <div class="icon">📈</div>
-            <h3 style="font-size: 18px; margin-top: 1rem;">Time Series</h3>
-            <p style="font-size: 12px; text-transform: none;">
-                Interactive visualizations with multiple display
+        <div style="
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 16px;
+            padding: 2.5rem 1.5rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            height: 100%;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            position: relative;
+            overflow: hidden;
+        " class="feature-card">
+            <div style="
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: 4px;
+                background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            "></div>
+            <div style="font-size: 48px; margin-bottom: 1rem;">📈</div>
+            <h3 style="font-size: 20px; margin: 1rem 0 0.75rem 0; color: #1F2A44; font-weight: 700;">
+                Time Series
+            </h3>
+            <p style="font-size: 13px; color: #6B7280; line-height: 1.5;">
+                Interactive visualizations with multiple display modes and customizable parameters
             </p>
+            <div style="
+                margin-top: 1.5rem;
+                padding: 6px 14px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                border-radius: 20px;
+                font-size: 11px;
+                font-weight: 600;
+                display: inline-block;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            ">Popular</div>
         </div>
+        
+        <style>
+            .feature-card:hover {
+                transform: translateY(-8px);
+                box-shadow: 0 12px 24px rgba(0,0,0,0.15);
+                border-color: #2196F3;
+            }
+        </style>
         """, unsafe_allow_html=True)
     
     with col2:
         st.markdown("""
-        <div class="tile">
-            <div class="icon">🔗</div>
-            <h3 style="font-size: 18px; margin-top: 1rem;">Correlation</h3>
-            <p style="font-size: 12px; text-transform: none;">
-                Discover relationships between parameters
+        <div style="
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 16px;
+            padding: 2.5rem 1.5rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            height: 100%;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            position: relative;
+            overflow: hidden;
+        " class="feature-card">
+            <div style="
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: 4px;
+                background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            "></div>
+            <div style="font-size: 48px; margin-bottom: 1rem;">🔗</div>
+            <h3 style="font-size: 20px; margin: 1rem 0 0.75rem 0; color: #1F2A44; font-weight: 700;">
+                Correlation
+            </h3>
+            <p style="font-size: 13px; color: #6B7280; line-height: 1.5;">
+                Discover hidden relationships between parameters with heatmaps and insights
             </p>
         </div>
         """, unsafe_allow_html=True)
     
     with col3:
         st.markdown("""
-        <div class="tile">
-            <div class="icon">🚨</div>
-            <h3 style="font-size: 18px; margin-top: 1rem;">Anomaly Detection</h3>
-            <p style="font-size: 12px; text-transform: none;">
-                Identify outliers with advanced algorithms
+        <div style="
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 16px;
+            padding: 2.5rem 1.5rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            height: 100%;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            position: relative;
+            overflow: hidden;
+        " class="feature-card">
+            <div style="
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: 4px;
+                background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            "></div>
+            <div style="font-size: 48px; margin-bottom: 1rem;">🚨</div>
+            <h3 style="font-size: 20px; margin: 1rem 0 0.75rem 0; color: #1F2A44; font-weight: 700;">
+                Anomaly Detection
+            </h3>
+            <p style="font-size: 13px; color: #6B7280; line-height: 1.5;">
+                Identify outliers automatically using Z-score and Isolation Forest algorithms
             </p>
+            <div style="
+                margin-top: 1.5rem;
+                padding: 6px 14px;
+                background: #10B981;
+                color: white;
+                border-radius: 20px;
+                font-size: 11px;
+                font-weight: 600;
+                display: inline-block;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+            ">AI-Powered</div>
         </div>
         """, unsafe_allow_html=True)
     
     with col4:
         st.markdown("""
-        <div class="tile">
-            <div class="icon">📤</div>
-            <h3 style="font-size: 18px; margin-top: 1rem;">Export</h3>
-            <p style="font-size: 12px; text-transform: none;">
-                Save filtered data in multiple formats
+        <div style="
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 16px;
+            padding: 2.5rem 1.5rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            height: 100%;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            position: relative;
+            overflow: hidden;
+        " class="feature-card">
+            <div style="
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: 4px;
+                background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            "></div>
+            <div style="font-size: 48px; margin-bottom: 1rem;">📤</div>
+            <h3 style="font-size: 20px; margin: 1rem 0 0.75rem 0; color: #1F2A44; font-weight: 700;">
+                Export
+            </h3>
+            <p style="font-size: 13px; color: #6B7280; line-height: 1.5;">
+                Save filtered data and visualizations in CSV, Excel, Parquet, or JSON format
             </p>
         </div>
         """, unsafe_allow_html=True)
     
     st.markdown("<br><br>", unsafe_allow_html=True)
     
+    # File Requirements Section with Better Design
     with st.expander("📋 File Requirements & Supported Formats", expanded=False):
         col1, col2 = st.columns(2)
         
@@ -810,9 +1071,38 @@ if df_raw is None or df_raw.empty:
     
     st.markdown("<br>", unsafe_allow_html=True)
     
+    # Call to Action
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        st.info("💡 **Don't have data?** You can also access this uploader from the sidebar after the page loads.")
+        st.markdown("""
+        <div style="
+            text-align: center;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            padding: 2.5rem;
+            border-radius: 16px;
+            margin: 2rem 0;
+        ">
+            <h3 style="color: #1F2A44; margin-bottom: 1rem; font-size: 24px;">
+                Ready to get started?
+            </h3>
+            <p style="color: #6B7280; margin-bottom: 1.5rem;">
+                Upload your first dataset or access the uploader from the sidebar
+            </p>
+            <div style="
+                display: inline-block;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 14px 36px;
+                border-radius: 50px;
+                font-size: 16px;
+                font-weight: 600;
+                box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+                cursor: pointer;
+            ">
+                ⬆️ Upload Data Above
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
     
     st.stop()
 
@@ -1980,3 +2270,4 @@ with st.sidebar:
             **Built by - Jeevan A. Jadhav**
             """
         )
+
