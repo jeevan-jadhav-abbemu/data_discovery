@@ -389,7 +389,7 @@ st.markdown(
     <style>
     /* Target the sidebar element by its data-testid */
     section[data-testid="stSidebar"] {
-        border-right: 5px solid #0068C9; /* Blue border on the right (NEW) */
+        border-right: 3px solid #ADD8E6; /* Blue border on the right (NEW) */
     }
     </style>
     """,
