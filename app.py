@@ -572,6 +572,73 @@ def apply_filters(df_in: pd.DataFrame, filters: Tuple[Tuple[str, str, Any], ...]
                 df_out = df_out[s != str(value)]
     return df_out
 
+# --- NEW: Steady State Detection Function ---
+def detect_steady_state(df_in: pd.DataFrame, column: str, window_size: str, std_threshold: float, min_duration_minutes: int) -> Dict[str, List[Dict]]:
+    """
+    Detects steady state periods for a single, specified numeric column (required by 'column' arg).
+    
+    A steady state is defined as a period where the rolling standard deviation
+    is below a defined threshold for a minimum continuous duration.
+    """
+    
+    # Initialization
+    results = {}
+    col = column
+    
+    # Ensure the column exists and is numeric, then extract and clean the series
+    if col not in df_in.columns or not pd.api.types.is_numeric_dtype(df_in[col]):
+        return {col: []}
+        
+    series = df_in[col].dropna()
+    
+    if series.empty:
+        results[col] = []
+        return results
+
+    # Convert minimum duration from minutes to a Timedelta object
+    min_duration = pd.Timedelta(minutes=min_duration_minutes)
+
+    # 1. Calculate Rolling Standard Deviation (time-based window)
+    rolling_std = series.rolling(window=window_size, min_periods=1).std().fillna(series.std())
+    
+    # 2. Identify periods where std is below threshold
+    is_steady = rolling_std < std_threshold
+
+    # 3. Group consecutive True values (steady state periods)
+    if is_steady.any():
+        # Run-length encoding: create groups of consecutive True/False values
+        # The logic below efficiently finds continuous blocks of 'True'
+        groups = is_steady.astype(int).diff().fillna(is_steady.astype(int)).abs().cumsum()
+        steady_groups = is_steady.groupby(groups).filter(lambda x: x.all())
+        
+        periods = []
+        
+        for name, group in steady_groups.groupby(groups):
+            start = group.index.min()
+            end = group.index.max()
+            
+            # Check minimum duration
+            if (end - start) >= min_duration:
+                # Calculate metrics for the identified steady period
+                mean_val = series.loc[start:end].mean()
+                std_val = series.loc[start:end].std()
+                
+                periods.append({
+                    'start': start,
+                    'end': end,
+                    'duration': end - start,
+                    'mean': mean_val,
+                    'std': std_val
+                })
+        
+        results[col] = periods
+    else:
+        results[col] = []
+
+    return results
+
+# --- END NEW FUNCTION ---
+
 def detect_column_types(df: pd.DataFrame) -> Tuple[List[str], List[str]]:
     num_cols = []
     for c in df.columns:
@@ -1373,7 +1440,7 @@ if len(df_filtered) > 100000:
 
 # ==================== Main Navigation (Replaces Tabs) ====================
 
-nav_options = ["📋 Overview", "📊 Visualize", "🚨 Anomaly Detection", "📤 Export"]
+nav_options = ["📋 Overview", "📊 Visualize", "🔬 Steady State", "🚨 Anomaly Detection", "📤 Export"]
 
 selected_view = st.radio(
     "Navigation",
@@ -2000,7 +2067,269 @@ elif selected_view == "📊 Visualize":
                 width="stretch"
             )
 
-# ==================== TAB 3: Anomaly Detection ====================
+# ==================== TAB 3: Steady State Condition ====================
+elif selected_view == "🔬 Steady State":
+    st.markdown('<div class="section-header">🔬 Steady State Condition Analysis</div>', unsafe_allow_html=True)
+    
+    num_cols = st.session_state.get('num_cols', [])
+    df_filtered = st.session_state['df_filtered']
+    
+    if df_filtered is None or df_filtered.empty:
+        show_empty_state("⚠️", "No Data Loaded", "Please load a dataset and configure the date/time column.")
+        st.stop()
+
+    if not num_cols:
+        st.warning("⚠️ No numeric columns available for steady state analysis.")
+        st.stop()
+        
+    # --- Steady State Detection UI Controls ---
+    st.markdown("### ⚙️ Detection Parameters")
+    
+    # 1. UI: Operating Regime Configuration (Fixed Mode)
+    # We maintain the column layout from the screenshot but fix the mode
+    col_alg, col_k = st.columns([2, 1])
+
+    with col_alg:
+        # Static display instead of radio button to lock the mode
+        st.markdown("**Detection Mode**")
+        st.info("Operating Regime")
+        detection_mode = "Operating Regime"
+
+    # Initialize num_clusters
+    num_clusters = 0
+    with col_k:
+        if not SKLEARN_AVAILABLE:
+            st.warning("Scikit-learn is required for K-Means.")
+            num_clusters = 0
+        else:
+            num_clusters = st.number_input(
+                "Number of Regimes (K)",
+                min_value=2,
+                max_value=10,
+                value=3, # Typically 2 or 3 for Low/High/Transition
+                step=1,
+                key="steady_state_num_clusters",
+                help="The number of distinct operating levels to search for."
+            )
+            
+    # 2. Parameter Selection (Full width for visibility)
+    steady_state_params = st.multiselect(
+        "Select parameter(s) for analysis",
+        options=num_cols,
+        default=num_cols[:1],
+        key="steady_state_params"
+    )
+    
+    if not steady_state_params:
+        show_empty_state("🔬", "Select Parameters", "Choose one or more parameters to begin steady state detection.")
+        st.stop()
+        
+    # Calculate a sensible default threshold based on the first selected param's std dev
+    default_std = df_filtered[steady_state_params[0]].std(skipna=True) * 0.1 if not df_filtered[steady_state_params[0]].empty else 0.1
+    default_std = max(default_std, 1e-6) # Ensure non-zero minimum
+    
+    # 3. Rolling Window, Std Threshold, and Duration (Horizontal Columns)
+    col_win, col_std, col_dur = st.columns(3)
+    
+    with col_win:
+        window_opts = ["1min", "5min", "10min", "30min", "1H", "6H", "1D"]
+        window_size = st.selectbox("Rolling Window Size (Std Dev)", options=window_opts, index=2, 
+                                   help="Time window for calculating local standard deviation.")
+        
+    with col_std:
+        std_threshold = st.number_input(
+            "Std Dev Threshold (Max variance)",
+            min_value=1e-12,
+            value=default_std,
+            format="%.6f",
+            help="Maximum standard deviation allowed within the window to be considered steady."
+        )
+        
+    with col_dur:
+        min_duration_minutes = st.number_input(
+            "Minimum Duration (Minutes)",
+            min_value=1,
+            value=60,
+            step=1,
+            help="Minimum continuous time (in minutes) a period must last to be considered a steady state."
+        )
+
+    st.markdown("---")
+    
+    # --- Run Detection ---
+    steady_state_results = {}
+    
+    with st.spinner(f"⏳ Detecting steady state periods using {detection_mode}..."):
+        
+        if not SKLEARN_AVAILABLE:
+            st.error("Scikit-learn is not installed. Please install sklearn to use Operating Regime detection.")
+            st.stop()
+        if num_clusters < 2:
+            st.error("K-Means requires at least 2 clusters.")
+            st.stop()
+            
+        for col in steady_state_params:
+            series = df_filtered[col].dropna()
+            if series.empty:
+                steady_state_results[col] = []
+                continue
+                
+            # 1. K-Means Clustering
+            data = series.values.reshape(-1, 1)
+            kmeans = KMeans(n_clusters=num_clusters, random_state=42, n_init='auto')
+            clusters = kmeans.fit_predict(data)
+            
+            # Create a temporary DataFrame for filtering
+            df_temp_cluster = pd.DataFrame(data=clusters, index=series.index, columns=[f'{col}_Cluster'])
+            df_temp_cluster[col] = series
+            
+            # Sort clusters by mean value to easily identify the highest regime
+            cluster_means = df_temp_cluster.groupby(f'{col}_Cluster')[col].mean().sort_values(ascending=False)
+            
+            st.markdown(f"**{col} Regimes Detected (Highest $\\rightarrow$ Lowest):**")
+            
+            # Create a selection box for the user to pick the desired steady state regime
+            cluster_options = [f"Cluster {i} (Mean: {mean:.2f})" for i, mean in cluster_means.items()]
+            selected_cluster_option = st.selectbox(
+                f"Select the Operating Regime for '{col}'",
+                options=cluster_options,
+                index=0, # Default to the highest regime
+                key=f"cluster_select_{col}"
+            )
+            
+            # Extract the actual cluster index (e.g., 0, 1, 2) from the string
+            selected_cluster_index = int(selected_cluster_option.split(' ')[1])
+            
+            # Filter the data to only include points in the selected cluster
+            df_cluster = df_temp_cluster[df_temp_cluster[f'{col}_Cluster'] == selected_cluster_index]
+            
+            # 2. Apply Rolling SD stability check only to the clustered data
+            col_result = detect_steady_state(
+                df_cluster[[col]], # df_in
+                column=col, # column
+                window_size=window_size, 
+                std_threshold=std_threshold, 
+                min_duration_minutes=min_duration_minutes
+            )
+            
+            # Extract the list of periods from the returned dictionary
+            steady_state_results[col] = col_result.get(col, [])
+            
+    # --- Visualization ---
+    st.markdown("### 📈 Steady State Trend View")
+    
+    # Prepare data for plotting (using existing logic)
+    downsample_limit = 50000 
+    resample_freq = st.session_state.get('prev_resample_freq')
+    
+    if resample_freq is None and len(df_filtered) > downsample_limit:
+        keep_idx = thin_index(df_filtered.index, downsample_limit)
+        df_plot = df_filtered.iloc[keep_idx]
+    else:
+        df_plot = df_filtered
+        
+    df_plot = numeric_df(df_plot[steady_state_params])
+    
+    # Get theme configuration
+    TEMPLATE, PAPER_BG, PLOT_BG, TEXT_COLOR, GRID_COLOR = theme_parts(st.session_state["user_prefs"]["dark_theme"])
+
+    rows = len(steady_state_params)
+    fig = make_subplots(
+        rows=rows, cols=1, shared_xaxes=True, vertical_spacing=0.08, 
+        subplot_titles=steady_state_params
+    )
+    color_cycle = px.colors.qualitative.Plotly
+    
+    all_periods = []
+    
+    for i, col in enumerate(steady_state_params, start=1):
+        color = color_cycle[(i - 1) % len(color_cycle)]
+        series = df_plot[col]
+        periods = steady_state_results.get(col, [])
+        
+        # Add the time series trace
+        fig.add_trace(
+            go.Scatter(
+                x=series.index, y=series, mode="lines", name=col, 
+                line=dict(color=color, width=2), 
+                hovertemplate="%{y:.2f}", showlegend=False
+            ), 
+            row=i, col=1
+        )
+        
+        # Add steady state regions (visual marking)
+        for p in periods:
+            # Add a colored rectangle to mark the steady state zone
+            fig.add_vrect(
+                x0=p['start'], x1=p['end'],
+                fillcolor="#A5D6A7", # Light green for steady state
+                opacity=0.4,
+                layer="below",
+                line_width=0,
+                row=i, col=1,
+                name=f"Steady State: {col}"
+            )
+            
+            # Store period data for the table
+            all_periods.append({
+                'Parameter': col,
+                'Start Time': p['start'],
+                'End Time': p['end'],
+                'Duration': p['duration'],
+                'Mean Value': p['mean'],
+                'Std Dev': p['std']
+            })
+
+        fig.update_yaxes(title_text=col, gridcolor=GRID_COLOR, row=i, col=1)
+        fig.update_xaxes(row=i, col=1)
+
+    # Global layout settings
+    fig.update_layout(
+        template=TEMPLATE,
+        paper_bgcolor=PAPER_BG,
+        plot_bgcolor=PLOT_BG,
+        title=f"Steady State Periods ({detection_mode}) | Window: {window_size}, Std Threshold: {std_threshold:.6f}, Min Duration: {min_duration_minutes} min",
+        height=calculate_chart_height(rows, 250, 180),
+        margin=dict(t=80),
+    )
+    
+    st.plotly_chart(fig, width='stretch')
+
+    # --- Tabular View ---
+    st.markdown("### 📋 Detected Steady State Periods")
+    
+    if all_periods:
+        # Create a DataFrame for the table
+        df_periods = pd.DataFrame(all_periods)
+        
+        # Format columns for display
+        df_periods['Start Time'] = df_periods['Start Time'].dt.strftime('%Y-%m-%d %H:%M:%S')
+        df_periods['End Time'] = df_periods['End Time'].dt.strftime('%Y-%m-%d %H:%M:%S')
+        
+        # Convert Duration to a readable string (e.g., '1 days 05:00:00')
+        df_periods['Duration'] = df_periods['Duration'].astype(str).str.replace('0 days ', '').str.replace('NaT', 'N/A')
+        
+        df_periods['Mean Value'] = df_periods['Mean Value'].round(4)
+        df_periods['Std Dev'] = df_periods['Std Dev'].round(6)
+        
+        # Rename columns for display
+        df_periods.columns = ['Parameter', 'Start Time', 'End Time', 'Duration', 'Mean Value', 'Std Dev']
+
+        st.dataframe(
+            df_periods.style.background_gradient(cmap='YlGn', subset=['Mean Value', 'Std Dev']), 
+            width='stretch'
+        )
+        
+        st.download_button(
+            label="⬇️ Download Steady State Table (CSV)",
+            data=df_periods.to_csv(index=False).encode('utf-8'),
+            file_name='steady_state_periods.csv',
+            mime='text/csv',
+        )
+    else:
+        st.info(f"No steady state periods found using {detection_mode} with the current configuration. Try adjusting the detection mode, number of regimes (K), Std Dev Threshold, or Minimum Duration.")
+
+# ==================== TAB 4: Anomaly Detection ====================
 
 elif selected_view == "🚨 Anomaly Detection":
     st.markdown('<div class="section-header">Anomaly Detection</div>', unsafe_allow_html=True)
@@ -2270,4 +2599,3 @@ with st.sidebar:
             **Built by - Jeevan A. Jadhav**
             """
         )
-
