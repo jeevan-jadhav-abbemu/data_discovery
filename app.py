@@ -19,6 +19,7 @@ from statsmodels.tsa.seasonal import seasonal_decompose
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+from scipy.stats import chi2
 
 # ===================== SIMPLE PASSWORD PROTECTION =====================
 def authenticate_user():
@@ -37,11 +38,15 @@ def authenticate_user():
         )
 
         if st.button("Login"):
-            if entered_password == st.secrets["PASSWORD"]:
-                st.session_state["password_ok"] = True
-                st.rerun()
-            else:
-                st.error("❌ Incorrect password")
+            try:
+                correct_password = st.secrets.get("PASSWORD", "")
+                if entered_password == correct_password:
+                    st.session_state["password_ok"] = True
+                    st.rerun()
+                else:
+                    st.error("❌ Incorrect password")
+            except Exception as e:
+                st.error(f"❌ Authentication error: {str(e)}")
 
         st.stop()  # stop execution until logged in
 
@@ -66,12 +71,10 @@ try:
     from sklearn.decomposition import PCA as SkPCA
     from sklearn.cluster import KMeans as SkKMeans
     from sklearn.cluster import MiniBatchKMeans as SkMiniBatchKMeans  # NEW
-    from sklearn.ensemble import IsolationForest as SkIsolationForest
     from sklearn.metrics import silhouette_score
     PCA = SkPCA
     KMeans = SkKMeans
     MiniBatchKMeans = SkMiniBatchKMeans  # NEW
-    IsolationForest = SkIsolationForest
     SKLEARN_AVAILABLE = True
 except Exception:
     MiniBatchKMeans = None  # NEW
@@ -113,7 +116,6 @@ except Exception:
             self.labels_ = labels
             return labels
 
-    IsolationForest = None
     silhouette_score = None
 
 try:
@@ -1220,169 +1222,145 @@ if df_raw is None or df_raw.empty:
     </div>
     """, unsafe_allow_html=True)
     
-    col1, col2, col3, col4 = st.columns(4)
-    
+    col1, col2, col3, col4, col5 = st.columns(5)
+
+    # ---------- TILE 1: TIME SERIES ----------
     with col1:
         st.markdown("""
-        <div style="
-            background: white;
-            border: 1px solid #e0e0e0;
-            border-radius: 16px;
-            padding: 2.5rem 1.5rem;
-            text-align: center;
-            transition: all 0.3s ease;
-            height: 100%;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-            position: relative;
-            overflow: hidden;
-        " class="feature-card">
-            <div style="
-                position: absolute;
-                top: 0;
-                left: 0;
-                right: 0;
-                height: 4px;
-                background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            "></div>
-            <div style="font-size: 48px; margin-bottom: 1rem;">📈</div>
-            <h3 style="font-size: 20px; margin: 1rem 0 0.75rem 0; color: #1F2A44; font-weight: 700;">
-                Time Series
-            </h3>
-            <p style="font-size: 13px; color: #6B7280; line-height: 1.5;">
-                Interactive visualizations with multiple display modes and customizable parameters
-            </p>
-            <div style="
-                margin-top: 1.5rem;
-                padding: 6px 14px;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
-                border-radius: 20px;
-                font-size: 11px;
-                font-weight: 600;
-                display: inline-block;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-            ">Popular</div>
-        </div>
-        
-        <style>
-            .feature-card:hover {
-                transform: translateY(-8px);
-                box-shadow: 0 12px 24px rgba(0,0,0,0.15);
-                border-color: #2196F3;
-            }
-        </style>
-        """, unsafe_allow_html=True)
-    
+    <div style="background:white;border:1px solid #e0e0e0;border-radius:16px;padding:2.5rem 1.5rem;
+    text-align:center;transition:all 0.3s ease;height:100%;box-shadow:0 2px 8px rgba(0,0,0,0.08);
+    position:relative;overflow:hidden;">
+
+    <div style="position:absolute;top:0;left:0;right:0;height:4px;
+    background:linear-gradient(90deg,#667eea 0%,#764ba2 100%);"></div>
+
+    <div style="font-size:48px;margin-bottom:1rem;">📈</div>
+
+    <h3 style="font-size:20px;margin:1rem 0 .75rem;color:#1F2A44;font-weight:700;">
+    Time Series
+    </h3>
+
+    <p style="font-size:13px;color:#6B7280;line-height:1.5;">
+    Interactive visualizations with multiple display modes and customizable parameters
+    </p>
+
+    <div style="margin-top:1.5rem;padding:6px 14px;background:linear-gradient(135deg,#667eea,#764ba2);
+    color:white;border-radius:20px;font-size:11px;font-weight:600;display:inline-block;text-transform:uppercase;">
+    Popular
+    </div>
+
+    </div>
+    """, unsafe_allow_html=True)
+
+
+    # ---------- TILE 2: MULTIVARIATE INSIGHTS ----------
     with col2:
         st.markdown("""
-        <div style="
-            background: white;
-            border: 1px solid #e0e0e0;
-            border-radius: 16px;
-            padding: 2.5rem 1.5rem;
-            text-align: center;
-            transition: all 0.3s ease;
-            height: 100%;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-            position: relative;
-            overflow: hidden;
-        " class="feature-card">
-            <div style="
-                position: absolute;
-                top: 0;
-                left: 0;
-                right: 0;
-                height: 4px;
-                background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            "></div>
-            <div style="font-size: 48px; margin-bottom: 1rem;">🔗</div>
-            <h3 style="font-size: 20px; margin: 1rem 0 0.75rem 0; color: #1F2A44; font-weight: 700;">
-                Correlation
-            </h3>
-            <p style="font-size: 13px; color: #6B7280; line-height: 1.5;">
-                Discover hidden relationships between parameters with heatmaps and insights
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-    
+    <div style="background:white;border:1px solid #e0e0e0;border-radius:16px;padding:2.5rem 1.5rem;
+    text-align:center;transition:all 0.3s ease;height:100%;box-shadow:0 2px 8px rgba(0,0,0,0.08);
+    position:relative;overflow:hidden;">
+
+    <div style="position:absolute;top:0;left:0;right:0;height:4px;
+    background:linear-gradient(90deg,#667eea 0%,#764ba2 100%);"></div>
+
+    <div style="font-size:48px;margin-bottom:1rem;">🔗</div>
+
+    <h3 style="font-size:20px;margin:1rem 0 .75rem;color:#1F2A44;font-weight:700;">
+    Multivariate Insights
+    </h3>
+
+    <p style="font-size:13px;color:#6B7280;line-height:1.5;">
+    Correlation heatmaps, PCA, clustering, dimension reduction, and pairwise parameter exploration
+    </p>
+
+    </div>
+    """, unsafe_allow_html=True)
+
+
+    # ---------- TILE 3: STEADY STATE DETECTION ----------
     with col3:
         st.markdown("""
-        <div style="
-            background: white;
-            border: 1px solid #e0e0e0;
-            border-radius: 16px;
-            padding: 2.5rem 1.5rem;
-            text-align: center;
-            transition: all 0.3s ease;
-            height: 100%;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-            position: relative;
-            overflow: hidden;
-        " class="feature-card">
-            <div style="
-                position: absolute;
-                top: 0;
-                left: 0;
-                right: 0;
-                height: 4px;
-                background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            "></div>
-            <div style="font-size: 48px; margin-bottom: 1rem;">🚨</div>
-            <h3 style="font-size: 20px; margin: 1rem 0 0.75rem 0; color: #1F2A44; font-weight: 700;">
-                Anomaly Detection
-            </h3>
-            <p style="font-size: 13px; color: #6B7280; line-height: 1.5;">
-                Identify outliers automatically using Z-score and Isolation Forest algorithms
-            </p>
-            <div style="
-                margin-top: 1.5rem;
-                padding: 6px 14px;
-                background: #10B981;
-                color: white;
-                border-radius: 20px;
-                font-size: 11px;
-                font-weight: 600;
-                display: inline-block;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-            ">AI-Powered</div>
-        </div>
-        """, unsafe_allow_html=True)
-    
+    <div style="background:white;border:1px solid #e0e0e0;border-radius:16px;padding:2.5rem 1.5rem;
+    text-align:center;transition:all 0.3s ease;height:100%;box-shadow:0 2px 8px rgba(0,0,0,0.08);
+    position:relative;overflow:hidden;">
+
+    <div style="position:absolute;top:0;left:0;right:0;height:4px;
+    background:linear-gradient(90deg,#667eea 0%,#764ba2 100%);"></div>
+
+    <div style="font-size:48px;margin-bottom:1rem;">🔬</div>
+
+    <h3 style="font-size:20px;margin:1rem 0 .75rem;color:#1F2A44;font-weight:700;">
+    Steady State Detection
+    </h3>
+
+    <p style="font-size:13px;color:#6B7280;line-height:1.5;">
+    Automated identification of stable operating regimes using adaptive multivariate thresholds
+    </p>
+
+    <div style="margin-top:1.5rem;padding:6px 14px;background:#3b82f6;color:white;border-radius:20px;
+    font-size:11px;font-weight:600;display:inline-block;text-transform:uppercase;">
+    New
+    </div>
+
+    </div>
+    """, unsafe_allow_html=True)
+
+
+    # ---------- TILE 4: ANOMALY DETECTION ----------
     with col4:
         st.markdown("""
-        <div style="
-            background: white;
-            border: 1px solid #e0e0e0;
-            border-radius: 16px;
-            padding: 2.5rem 1.5rem;
-            text-align: center;
-            transition: all 0.3s ease;
-            height: 100%;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-            position: relative;
-            overflow: hidden;
-        " class="feature-card">
-            <div style="
-                position: absolute;
-                top: 0;
-                left: 0;
-                right: 0;
-                height: 4px;
-                background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            "></div>
-            <div style="font-size: 48px; margin-bottom: 1rem;">📤</div>
-            <h3 style="font-size: 20px; margin: 1rem 0 0.75rem 0; color: #1F2A44; font-weight: 700;">
-                Export
-            </h3>
-            <p style="font-size: 13px; color: #6B7280; line-height: 1.5;">
-                Save filtered data and visualizations in CSV, Excel, Parquet, or JSON format
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
+    <div style="background:white;border:1px solid #e0e0e0;border-radius:16px;padding:2.5rem 1.5rem;
+    text-align:center;transition:all 0.3s ease;height:100%;box-shadow:0 2px 8px rgba(0,0,0,0.08);
+    position:relative;overflow:hidden;">
+
+    <div style="position:absolute;top:0;left:0;right:0;height:4px;
+    background:linear-gradient(90deg,#667eea 0%,#764ba2 100%);"></div>
+
+    <div style="font-size:48px;margin-bottom:1rem;">🚨</div>
+
+    <h3 style="font-size:20px;margin:1rem 0 .75rem;color:#1F2A44;font-weight:700;">
+    Anomaly Detection
+    </h3>
+
+    <p style="font-size:13px;color:#6B7280;line-height:1.5;">
+    Detect anomalies automatically using Multivariate Models
+    </p>
+
+    <div style="margin-top:1.5rem;padding:6px 14px;background:#10B981;color:white;border-radius:20px;
+    font-size:11px;font-weight:600;display:inline-block;text-transform:uppercase;">
+    AI-Powered
+    </div>
+
+    </div>
+    """, unsafe_allow_html=True)
+
+
+    # ---------- TILE 5: EXPORT ----------
+    with col5:
+        st.markdown("""
+    <div style="background:white;border:1px solid #e0e0e0;border-radius:16px;padding:2.5rem 1.5rem;
+    text-align:center;transition:all 0.3s ease;height:100%;box-shadow:0 2px 8px rgba(0,0,0,0.08);
+    position:relative;overflow:hidden;">
+
+    <div style="position:absolute;top:0;left:0;right:0;height:4px;
+    background:linear-gradient(90deg,#667eea 0%,#764ba2 100%);"></div>
+
+    <div style="font-size:48px;margin-bottom:1rem;">📤</div>
+
+    <h3 style="font-size:20px;margin:1rem 0 .75rem;color:#1F2A44;font-weight:700;">
+    Export
+    </h3>
+
+    <p style="font-size:13px;color:#6B7280;line-height:1.5;">
+    Export filtered data and visualizations in CSV, Excel, Parquet, or JSON formats
+    </p>
+
+    </div>
+    """, unsafe_allow_html=True)
     
     st.markdown("<br><br>", unsafe_allow_html=True)
+    
+
     
     # File Requirements Section with Better Design
     with st.expander("📋 File Requirements & Supported Formats", expanded=True):
@@ -1533,6 +1511,10 @@ PAPER_BG = "white"
 PLOT_BG = "white"
 FONT_COLOR = "#0E1117"
 GRID_COLOR = "#E5ECF6"
+FONT_PRIMARY = "#0E1117"
+FONT_SIZE_TICK = 11
+STANDARD_MARGIN = dict(l=60, r=40, t=50, b=60)
+GRID_WIDTH = 1
 
 # ==================== Sidebar Filters & Controls ====================
 
@@ -1873,6 +1855,7 @@ elif selected_view == "📊 Visualize":
             )
         
         with col2:
+            display_mode = "Stacked"  # Default value
             if chart_choice == "Time Series Trend":
                 display_mode = st.radio(
                     "Display Mode",
@@ -1907,7 +1890,7 @@ elif selected_view == "📊 Visualize":
                     vertical_spacing=0.1,
                     subplot_titles=selected_params
                 )
-                
+
                 border_color = "#D1D5DB"
                 
                 for i, col in enumerate(selected_params, start=1):
@@ -1975,10 +1958,12 @@ elif selected_view == "📊 Visualize":
                 
                 st.plotly_chart(fig, width="stretch")
             
+
+            
             else:
                 fig = go.Figure()
+
                 layout_updates = {}
-                
                 if len(selected_params) > 2:
                     layout_updates["xaxis"] = dict(domain=[0.1, 0.9])
                 
@@ -2205,7 +2190,7 @@ elif selected_view == "📊 Visualize":
                 vertical_spacing=0.02,
                 subplot_titles=df_num.columns
             )
-            
+
             color_cycle = px.colors.qualitative.Plotly
             
             for i, col in enumerate(df_num.columns, start=1):
@@ -2344,7 +2329,7 @@ elif selected_view == "📊 Visualize":
                 width="stretch"
             )
 
-# ==================== TAB 3: Steady State Condition (FINAL UPDATED) ====================
+# ==================== TAB 3: Steady State Condition (UPDATED) ====================
 
 elif selected_view == "🔬 Steady State":
     st.markdown('<div class="section-header">🔬 Automated Steady State Analysis</div>', unsafe_allow_html=True)
@@ -2358,7 +2343,7 @@ elif selected_view == "🔬 Steady State":
         st.session_state['analysis_running'] = False
 
     # --- Mode Selector ---
-    st.markdown("#### 1. Configuration")
+    st.markdown("#### Configuration")
     ss_mode = st.radio("Analysis Mode", ["Single Parameter", "Multi-Parameter"], horizontal=True)
 
     # --- Input Section ---
@@ -2424,6 +2409,11 @@ elif selected_view == "🔬 Steady State":
                     min_dur, 
                     sensitivity
                 )
+                
+                # Initialize 'Selected' column for the new feature
+                if not raw_df.empty:
+                    raw_df.insert(0, 'Selected', False)
+                    
                 st.session_state['ss_raw_results'] = raw_df
                 st.session_state['ss_calc_threshold'] = thresh
                 st.session_state['analysis_running'] = False
@@ -2435,9 +2425,11 @@ elif selected_view == "🔬 Steady State":
     # --- Results Display ---
     if st.session_state['ss_raw_results'] is not None and not st.session_state['ss_raw_results'].empty:
         
-        df_res = st.session_state['ss_raw_results'].copy()
-        # --- NEW: Add Segment ID for the table ---
-        df_res['Segment'] = range(1, len(df_res) + 1)
+        df_res = st.session_state['ss_raw_results']
+        
+        # Ensure columns exist
+        if 'Selected' not in df_res.columns: df_res.insert(0, 'Selected', False)
+        if 'Segment' not in df_res.columns: df_res['Segment'] = range(1, len(df_res) + 1)
         
         n_segments = len(df_res)
         suggested_k = max(2, min(5, int(np.sqrt(n_segments))))
@@ -2467,7 +2459,7 @@ elif selected_view == "🔬 Steady State":
                 st.session_state['ss_calc_threshold'] = 0.0
                 st.rerun()
 
-        # Re-Run Clustering
+        # Re-Run Clustering logic
         if SKLEARN_AVAILABLE and n_segments >= num_regimes and num_regimes > 1:
             if isinstance(target_params, list):
                 feature_cols = [f'Mean_{c}' for c in target_params]
@@ -2500,8 +2492,209 @@ elif selected_view == "🔬 Steady State":
         else:
             view_param = target_params
 
-        # 2. Charts Section
+
+        # ==================== 2. REGIME SUMMARY (Always Visible) ====================
+        st.markdown("#### 📊 Regime Summary")
+        
+        agg_dict = {'Duration_Min': ['sum', 'count']}
+        mean_col_name = f'Mean_{view_param}' if isinstance(target_params, list) else 'Mean'
+        agg_dict[mean_col_name] = ['mean', 'std']
+        
+        summary_stats = df_res.groupby('Regime').agg(agg_dict).reset_index()
+        summary_stats['Duration_Min', 'sum'] = summary_stats['Duration_Min', 'sum'].fillna(0)
+        
+        # ==================== NEW REGIME STATISTICS PIE CHART ====================
+        st.markdown("### 📊 Regime Duration Breakdown")
+
+        # 1. Calculate Total Duration of the filtered time range
+        df_filtered = st.session_state['df_filtered']
+        # Handle case where index might be empty (e.g., if df_filtered is empty after resample/filter)
+        if df_filtered.empty:
+            st.warning("No data in the filtered range to calculate total time span.")
+            total_minutes = 0
+        else:
+            total_time_span = df_filtered.index.max() - df_filtered.index.min()
+            total_minutes = total_time_span.total_seconds() / 60
+        
+        total_days = total_minutes / (60 * 24)
+
+        # 2. Prepare data for pie chart
+        total_regime_minutes = summary_stats[('Duration_Min', 'sum')].sum()
+        unassigned_minutes = max(0, total_minutes - total_regime_minutes)
+        unassigned_days = unassigned_minutes / (60 * 24)
+
+        pie_data = []
+
+        # Add individual regime durations
+        for _, row in summary_stats.iterrows():
+            regime_id = int(row['Regime'])
+            duration = row[('Duration_Min', 'sum')]
+            if duration > 0: # Only include regimes with duration > 0
+                pie_data.append({
+                    'Category': f'Regime {regime_id}', 
+                    'Duration_Min': duration,
+                    'Duration_Days': duration / (60 * 24)
+                })
+
+        # Add unassigned duration if greater than 0
+        if unassigned_minutes > 0:
+            pie_data.append({
+                'Category': 'Unassigned', 
+                'Duration_Min': unassigned_minutes,
+                'Duration_Days': unassigned_minutes / (60 * 24)
+            })
+
+        df_pie = pd.DataFrame(pie_data)
+        
+        # Display Total Metrics
+        col_total_days, col_total_minutes, _ = st.columns(3)
+        with col_total_days:
+            st.metric("Total Time Span", f"{total_days:.2f} Days", help="Difference between start and end of filtered data.")
+        with col_total_minutes:
+            # Use total_minutes for the metric value for clearer context
+            st.metric(
+                "Unassigned Time", 
+                f"{unassigned_days:.2f} Days ({unassigned_minutes:.0f} Mins)", 
+                delta=f"Total Regimes: {total_regime_minutes:.0f} Mins", 
+                delta_color="off", 
+                help="Time that did not fall into any detected steady state regime."
+            )
+
+        # 3. Create Donut Chart
+        if not df_pie.empty:
+            try:
+                # Use a custom color sequence for distinct regimes and a grey for 'Unassigned'
+                colors = px.colors.qualitative.Plotly
+                color_map = {f'Regime {i}': colors[i % len(colors)] for i in df_pie[df_pie['Category'] != 'Unassigned']['Category'].str.replace('Regime ', '').astype(int).unique()}
+                if 'Unassigned' in df_pie['Category'].values:
+                    color_map['Unassigned'] = '#bdbdbd' # Light gray for unassigned time
+
+                fig_pie = px.pie(
+                    df_pie, 
+                    values='Duration_Min', 
+                    names='Category', 
+                    title='Proportion of Total Time Span (Regimes vs. Unassigned)',
+                    hole=.5, # Donut chart
+                    template=TEMPLATE,
+                    color='Category',
+                    color_discrete_map=color_map
+                )
+                
+                # Customize hover text to show both Minutes and Days
+                fig_pie.update_traces(
+                    hovertemplate="<b>%{label}</b><br>Duration: %{value:.0f} Mins<br>(%{customdata[0]:.2f} Days)<br>Percentage: %{percent}<extra></extra>",
+                    customdata=df_pie[['Duration_Days']].values
+                )
+                
+                # Add annotation for total
+                fig_pie.add_annotation(
+                    text=f"Total: {total_minutes:.0f} Mins",
+                    x=0.5, y=0.5, showarrow=False, 
+                    font=dict(size=14, color="#1F2A44")
+                )
+
+                st.plotly_chart(fig_pie, use_container_width=True)
+
+            except Exception as e:
+                st.error(f"Could not generate Pie Chart: {e}")
+        else:
+            st.info("No regimes were detected, and the time span is zero.")
+
+        # ==================== END NEW PIE CHART ====================
+
+        # --- Color Scaling based on Duration ---
+        max_duration = summary_stats['Duration_Min', 'sum'].max()
+        # Generate a continuous color map (e.g., from light gray to bold blue)
+        # Use a simpler scheme: scale opacity or background color
+        regime_cols = st.columns(len(summary_stats))
+
+        # --- Color Scaling based on Duration ---
+        max_duration = summary_stats['Duration_Min', 'sum'].max()
+        
+        # Generate a continuous color map (e.g., from light gray to bold blue)
+        # Use a simpler scheme: scale opacity or background color
+        
+        regime_cols = st.columns(len(summary_stats))
+        
+        for idx, row in summary_stats.iterrows():
+            regime_id = int(row['Regime'])
+            total_min = row[('Duration_Min', 'sum')]
+            avg_val = row[(mean_col_name, 'mean')]
+            count = int(row[('Duration_Min', 'count')])
+            
+            # Color calculation: Higher duration means higher intensity (more prominent)
+            # Normalize duration from 0 to 1, then map to a color scale
+            normalized_duration = total_min / max_duration if max_duration > 0 else 0
+            
+            # Simple color mapping: adjust hue or opacity based on duration (using Hex/CSS)
+            # We'll use a color scale from a light blue to a primary blue/teal
+            # Interpolating RGB values: Light Blue (e.g., #ADD8E6) to Primary Blue (#1f77b4)
+            # Since Streamlit metrics don't accept complex HTML styling easily, we use a simple background gradient concept.
+            # However, for a Streamlit `st.metric` visual color cue, the best we can do is use custom CSS or rely on the `delta` color. 
+            # Sticking to the requirement for visual recognition, we will use a Markdown hack for the visual display:
+            
+            if total_min > 1440: dur_str = f"{total_min/1440:.1f} d"
+            elif total_min > 60: dur_str = f"{total_min/60:.1f} h"
+            else: dur_str = f"{total_min:.0f} m"
+            
+            # Determine color class (simplified visual intensity)
+            if normalized_duration > 0.8:
+                 color_code = '#A8DADC' # High dominance (light teal background)
+            elif normalized_duration > 0.4:
+                 color_code = '#F0F8FF' # Medium dominance (lightest blue)
+            else:
+                 color_code = '#F7F7F7' # Low dominance (light gray)
+
+            
+            metric_html = f"""
+            <div style='background-color: {color_code}; padding: 10px; border-radius: 5px; border-left: 5px solid #1f77b4;'>
+                <p style='margin: 0; font-size: 0.8rem; color: #555;'>Regime {regime_id}</p>
+                <h3 style='margin: 0; color: #1f77b4;'>{avg_val:.2f}</h3>
+                <p style='margin: 0; font-size: 0.8rem; color: #777;'>{count} segs | {dur_str}</p>
+            </div>
+            """
+
+            with regime_cols[idx]:
+                st.markdown(metric_html, unsafe_allow_html=True)
+
+        st.markdown("---")
+
+
+        # 3. Charts Section with Selection Sync
+        st.markdown(f"#### 📈 Interactive Chart: {view_param}")
+        
+        # --- NEW CONSOLIDATED REGIME SELECTION TOOLS (Above Chart) ---   
+        st.markdown("### 🗺️ **Regime Selection Tools**")
+        
+        # Use columns to place the controls together
+        col_select_zone, col_confirm, col_clear_chart, _ = st.columns([1, 1, 1, 3])
+        
+        # 1. Dedicated "Select Zone" Button (Box Select Re-activation)
+        with col_select_zone:
+            # Clicking this button forces a Streamlit rerun, which re-applies the 
+            # `chart_config` below, re-enabling Box Select even after Zoom/Pan.
+            if st.button("🎯 Select Zone (Box Select)", key="activate_box_select_btn", type="primary", 
+                        help="Re-activates the Box Select tool on the chart below. Click this after using Zoom or Pan."):
+                st.toast("Box Select re-activated. Click and drag on the chart below.", icon="🎯")
+                st.rerun() # Forces the new config to apply and re-draw the plot
+            
+        # 2. Confirm Selection 
+        with col_confirm:
+            if st.button("✅ Confirm Selection", key="confirm_chart_btn", help="Finalize the current chart selection."):
+                st.toast("Selection confirmed in table.", icon="✅")
+                
+        # 3. Clear Selection
+        with col_clear_chart:
+            if st.button("🧹 Clear Selection", key="clear_chart_btn", help="Deselect all segments marked by the chart."):
+                st.session_state['ss_raw_results']['Selected'] = False
+                st.toast("All segments deselected.", icon="🧹")
+                st.rerun() # Rerun to update the dataframe and chart visual instantly
+        
+        st.markdown("---")
+
         df_chart = st.session_state['df_filtered'][view_param]
+        
+        # Optimization for plotting large datasets
         if len(df_chart) > 20000:
             df_chart_plot = df_chart.iloc[thin_index(df_chart.index, 20000)]
         else:
@@ -2530,8 +2723,7 @@ elif selected_view == "🔬 Steady State":
         fig.add_trace(go.Scatter(
             x=df_chart_plot.index, y=df_chart_plot,
             mode='lines', name='Background',
-            # --- CHANGE 1: Improved Line Visibility ---
-            line=dict(color='#777777', width=1), # Changed from light gray #e0e0e0 to medium gray #777777
+            line=dict(color='#777777', width=1), 
             hoverinfo='skip', showlegend=False
         ), row=2, col=1)
 
@@ -2543,9 +2735,14 @@ elif selected_view == "🔬 Steady State":
             color = colors[int(r-1) % len(colors)]
             
             for i, (_, row) in enumerate(subset.iterrows()):
+                # Highlight if selected
+                is_sel = row.get('Selected', False)
+                opacity = 0.8 if is_sel else 0.2
+                line_width = 4 if is_sel else 3
+                
                 fig.add_vrect(
                     x0=row['Start'], x1=row['End'],
-                    fillcolor=color, opacity=0.2,
+                    fillcolor=color, opacity=opacity,
                     line_width=0, layer="below", row=2, col=1 
                 )
                 
@@ -2556,7 +2753,7 @@ elif selected_view == "🔬 Steady State":
                     x=[row['Start'], row['End']],
                     y=[mean_val, mean_val],
                     mode='lines',
-                    line=dict(color=color, width=3),
+                    line=dict(color=color, width=line_width),
                     name=f"Regime {r}", 
                     legendgroup=f"Regime {r}",
                     showlegend=show_legend,
@@ -2566,56 +2763,85 @@ elif selected_view == "🔬 Steady State":
         fig.update_layout(
             template="plotly_white", 
             height=700, 
-            margin=dict(l=40, r=40, t=110, b=40),
+            margin=dict(l=40, r=40, t=60, b=40),
             hovermode="x unified",
+            dragmode='select',  # DEFAULT to BOX SELECT
             legend=dict(
                 orientation="h", 
                 yanchor="bottom", 
                 y=1.1,
                 xanchor="right", 
                 x=1
-            )
+            ),
+            # --- 3. LEGEND PLACEMENT FIX ---
+            # Reposition the Plotly modebar (tools) slightly lower or adjust legend position further
+            # We'll adjust the modebar orientation and legend placement in Row 1 (Raw Trend)
+            
         )
+        # Update Row 1 Layout (Raw Parameter Trend) for Legend Fix
+        fig.update_layout({
+            'xaxis': {'anchor': 'y2'}, # Keep shared x-axis
+            # Reposition Legend 1 (Raw Signal) below the title and away from controls
+            'legend1': dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.03, # Adjusted slightly higher, usually the top margin is 1
+                xanchor="left",
+                x=0,
+                bgcolor="rgba(255, 255, 255, 0.7)"
+            )
+        })
+        
+        # Ensure the modebar is positioned correctly (default often puts it top right)
+        # Streamlit controls modebar visibility, but repositioning is tricky via fig object.
+        # However, adjusting legend positioning usually solves the overlap.
+        
         fig.update_annotations(font=dict(size=16, color="#1F2A44", family="Arial", weight="bold"))
 
-        st.plotly_chart(fig, width='stretch')
+        # --- GRAPHICAL SELECTION LOGIC ---
+        chart_config = {
+            'displayModeBar': True,
+            # Remove and re-add 'select2d' to force the active tool state to reset.
+            'modeBarButtonsToRemove': ['lasso2d', 'select2d'],
+            'modeBarButtonsToAdd': ['select2d']
+        }
 
-        # ==================== REGIME SUMMARY & DISTRIBUTION (UNCHANGED) ====================
-        st.markdown("### 📊 Regime Summary")
+        chart_selection = st.plotly_chart(
+            fig, 
+            width='stretch', 
+            on_select="rerun", 
+            selection_mode="box",
+            config=chart_config
+        )
         
-        agg_dict = {'Duration_Min': ['sum', 'count']}
-        mean_col_name = f'Mean_{view_param}' if isinstance(target_params, list) else 'Mean'
-        agg_dict[mean_col_name] = ['mean', 'std']
-        
-        summary_stats = df_res.groupby('Regime').agg(agg_dict)
-        regime_cols = st.columns(len(summary_stats))
-        
-        for idx, (regime_id, row) in enumerate(summary_stats.iterrows()):
-            with regime_cols[idx]:
-                avg_val = row[(mean_col_name, 'mean')]
-                std_val = row[(mean_col_name, 'std')]
-                total_min = row[('Duration_Min', 'sum')]
-                count = int(row[('Duration_Min', 'count')])
-                
-                if total_min > 1440: dur_str = f"{total_min/1440:.1f} d"
-                elif total_min > 60: dur_str = f"{total_min/60:.1f} h"
-                else: dur_str = f"{total_min:.0f} m"
-                
-                st.metric(
-                    label=f"Regime {int(regime_id)}",
-                    value=f"{avg_val:.2f}",
-                    delta=f"{count} segs | {dur_str}",
-                    delta_color="off"
-                )
-        
-        st.markdown("---")    
+        # Process the selection
+        if chart_selection and chart_selection.get("selection"):
+            selected_boxes = chart_selection["selection"].get("box", [])
+            
+            ranges = []
+            if selected_boxes:
+                # Use only the x-axis range for time selection (assuming selection in Row 2)
+                for box in selected_boxes:
+                    if "x" in box:
+                        ranges.append((pd.to_datetime(box["x"][0]), pd.to_datetime(box["x"][1])))
 
-        # ==================== DISTRIBUTION (UNCHANGED) ====================
-        st.markdown("### 📊 Regime Distribution Analysis")
-        st.caption(f"Comparing distribution of **{view_param}** across regimes.")
+            if ranges:
+                # Select any segment that overlaps with the selection box
+                for idx, row in df_res.iterrows():
+                    for (start_sel, end_sel) in ranges:
+                        if (row['Start'] <= end_sel) and (row['End'] >= start_sel):
+                            df_res.at[idx, 'Selected'] = True
+                            
+                st.session_state['ss_raw_results'] = df_res
 
-        hist_data = []
-        with st.spinner("Generating distribution..."):
+        # ==================== COLLAPSIBLE ANALYSIS CHARTS ====================
+        st.write("")
+        with st.expander("📊 Regime Distribution Analysis", expanded=False):
+            st.markdown("### 📊 Regime Distribution Analysis")
+            st.caption(f"Comparing distribution of **{view_param}** across regimes.")
+            
+            # ... (Rest of Distribution Analysis Code remains the same)
+            hist_data = []
             for _, row in df_res.iterrows():
                 mask = (st.session_state['df_filtered'].index >= row['Start']) & \
                        (st.session_state['df_filtered'].index <= row['End'])
@@ -2623,105 +2849,99 @@ elif selected_view == "🔬 Steady State":
                 temp_df = pd.DataFrame({'Value': pd.to_numeric(segment_data, errors='coerce'), 'Regime': f"Regime {int(row['Regime'])}"})
                 hist_data.append(temp_df)
 
-        if hist_data:
-            df_hist = pd.concat(hist_data, ignore_index=True).dropna()
-            df_hist = df_hist.sort_values('Regime')
+            if hist_data:
+                df_hist = pd.concat(hist_data, ignore_index=True).dropna()
+                df_hist = df_hist.sort_values('Regime')
+                fig_hist = px.histogram(
+                    df_hist, x="Value", color="Regime", 
+                    barmode="overlay", marginal="box", opacity=0.6,
+                    color_discrete_sequence=px.colors.qualitative.Bold,
+                    title=f"Value Distribution: {view_param}"
+                )
+                fig_hist.update_layout(template="plotly_white", height=400)
+                st.plotly_chart(fig_hist, width='stretch')
+
+
+        with st.expander("🧬 Regime Consistency (Overlay)", expanded=False):
+            st.markdown("### 🧬 Regime Consistency")
+            st.caption(f"Visualizing consistency of **{view_param}** for a specific regime.")
             
-            fig_hist = px.histogram(
-                df_hist, x="Value", color="Regime", 
-                barmode="overlay", marginal="box", opacity=0.6,
-                color_discrete_sequence=px.colors.qualitative.Bold,
-                title=f"Value Distribution: {view_param}"
+            # ... (Rest of Overlay Code remains the same)
+            selected_regime_ov = st.selectbox("Select Regime for Overlay", options=sorted(df_res['Regime'].unique()))
+            subset_overlay = df_res[df_res['Regime'] == selected_regime_ov]
+            
+            fig_overlay = go.Figure()
+            regime_mean_val = subset_overlay[mean_col_name].mean()
+
+            for i, row in subset_overlay.iterrows():
+                mask = (st.session_state['df_filtered'].index >= row['Start']) & \
+                       (st.session_state['df_filtered'].index <= row['End'])
+                segment_data = st.session_state['df_filtered'].loc[mask, view_param]
+                
+                if len(segment_data) > 0:
+                    t_start = segment_data.index[0]
+                    relative_time = (segment_data.index - t_start).total_seconds() / 60
+                    fig_overlay.add_trace(go.Scatter(
+                        x=relative_time, y=segment_data.values,
+                        mode='lines', line=dict(width=1), opacity=0.5,
+                        name=f"Seg {row['Segment']}"
+                    ))
+
+            fig_overlay.add_hline(y=regime_mean_val, line_dash="dash", line_color="black")
+            fig_overlay.update_layout(
+                template="plotly_white", height=450,
+                title=f"Overlay: Regime {selected_regime_ov} ({view_param})",
+                xaxis_title="Minutes from Start", yaxis_title=view_param
             )
-            fig_hist.update_layout(template="plotly_white", height=400)
-            st.plotly_chart(fig_hist, width='stretch')
+            st.plotly_chart(fig_overlay, width='stretch')
 
         st.markdown("---")
 
-        # ==================== OVERLAY (UNCHANGED) ====================
-        st.markdown("### 🧬 Regime Consistency (Overlay)")
-        st.caption(f"Visualizing consistency of **{view_param}** for a specific regime.")
-
-        selected_regime_ov = st.selectbox("Select Regime", options=sorted(df_res['Regime'].unique()))
-        subset_overlay = df_res[df_res['Regime'] == selected_regime_ov]
+        # ==================== DETAILED BREAKDOWN & SELECTION ====================
+        st.markdown("### 📋 Detailed Breakdown & Selection")
         
-        fig_overlay = go.Figure()
-        regime_mean_val = subset_overlay[mean_col_name].mean()
-
-        for i, row in subset_overlay.iterrows():
-            mask = (st.session_state['df_filtered'].index >= row['Start']) & \
-                   (st.session_state['df_filtered'].index <= row['End'])
-            segment_data = st.session_state['df_filtered'].loc[mask, view_param]
-            
-            if len(segment_data) > 0:
-                t_start = segment_data.index[0]
-                relative_time = (segment_data.index - t_start).total_seconds() / 60
-                
-                fig_overlay.add_trace(go.Scatter(
-                    x=relative_time, y=segment_data.values,
-                    mode='lines', line=dict(width=1), opacity=0.5,
-                    name=f"Seg {row['Segment']} ({row['Start'].strftime('%H:%M')})" # Using the new Segment ID here
-                ))
-
-        fig_overlay.add_hline(y=regime_mean_val, line_dash="dash", line_color="black", annotation_text="Regime Mean")
-        
-        fig_overlay.update_layout(
-            template="plotly_white", height=450,
-            title=f"Overlay: Regime {selected_regime_ov} ({view_param})",
-            xaxis_title="Time from Start (Minutes)", yaxis_title=view_param,
-            showlegend=True,
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        # --- FILTER BY REGIME ---
+        unique_regimes = sorted(df_res['Regime'].unique())
+        selected_regimes_filter = st.multiselect(
+            "Filter by Regime",
+            options=unique_regimes,
+            default=unique_regimes,
+            key="regime_multiselect"
         )
-        st.plotly_chart(fig_overlay, width='stretch')
+        
+        df_filtered_view = df_res[df_res['Regime'].isin(selected_regimes_filter)].copy()
 
-        # ==================== TABLE (UPDATED) ====================
-        st.markdown("### 📋 Detailed Breakdown")
+        # --- BULK ACTION BUTTONS ---
+        col_btns1, col_btns2, _ = st.columns([1, 1, 4])
         
-        # --- NEW: Base columns now include 'Segment' ---
-        base_cols = ['Regime', 'Segment', 'Start', 'End', 'Duration_Min']
-        
+        with col_btns1:
+            if st.button("☑️ Select All", help="Select all currently filtered segments"):
+                st.session_state['ss_raw_results'].loc[df_filtered_view.index, 'Selected'] = True
+                st.rerun()
+        with col_btns2:
+            if st.button("⬜ Deselect All", help="Deselect all currently filtered segments"):
+                st.session_state['ss_raw_results'].loc[df_filtered_view.index, 'Selected'] = False
+                st.rerun()
+
+        # --- DATA EDITOR ---
+        base_cols = ['Selected', 'Regime', 'Segment', 'Start', 'End', 'Duration_Min']
         if isinstance(target_params, list):
             param_cols = [f'Mean_{c}' for c in target_params]
             final_cols = base_cols + param_cols
         else:
             final_cols = base_cols + ['Mean', 'Std']
 
-        display_df = df_res[final_cols].copy()
+        display_df = df_filtered_view[final_cols].copy()
         display_df['Duration (Days)'] = display_df['Duration_Min'] / 1440
         
-        tbl_c1, tbl_c2 = st.columns([3, 1])
-        
-        with tbl_c1:
-            unique_regimes = sorted(display_df['Regime'].unique())
-            selected_regimes_filter = st.multiselect(
-                "Filter by Regime",
-                options=unique_regimes,
-                default=unique_regimes
-            )
-            
-        with tbl_c2:
-            st.write("") 
-            csv = df_res.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                "⬇️ Download CSV",
-                csv,
-                "steady_states_data.csv",
-                "text/csv",
-                key='download-csv-table',
-                use_container_width=True
-            )
-
-        if selected_regimes_filter:
-            display_df = display_df[display_df['Regime'].isin(selected_regimes_filter)]
-
         column_configuration = {
+            "Selected": st.column_config.CheckboxColumn("Select", default=False),
             "Regime": st.column_config.NumberColumn("Regime", format="Regime %d"),
-            # --- NEW: Segment column configuration ---
-            "Segment": st.column_config.NumberColumn("Segment ID", help="Sequential ID for each detected segment"),
-            "Start": st.column_config.DatetimeColumn("Start Time", format="D MMM YYYY, HH:mm"),
-            "End": st.column_config.DatetimeColumn("End Time", format="D MMM YYYY, HH:mm"),
+            "Segment": st.column_config.NumberColumn("ID", width="small"),
+            "Start": st.column_config.DatetimeColumn("Start", format="D MMM, HH:mm"),
+            "End": st.column_config.DatetimeColumn("End", format="D MMM, HH:mm"),
             "Duration_Min": st.column_config.ProgressColumn(
-                "Duration (Visual)", format="%d min",
+                "Duration", format="%d min",
                 min_value=0, max_value=int(display_df['Duration_Min'].max()) if not display_df.empty else 100
             ),
             "Duration (Days)": st.column_config.NumberColumn("Days", format="%.2f d")
@@ -2734,128 +2954,603 @@ elif selected_view == "🔬 Steady State":
             column_configuration['Mean'] = st.column_config.NumberColumn("Average", format="%.2f")
             column_configuration['Std'] = st.column_config.NumberColumn("Std Dev", format="%.3f")
 
-        st.dataframe(
+        # Display Data Editor
+        edited_df = st.data_editor(
             display_df,
             column_config=column_configuration,
-            # --- UPDATED column_order ---
-            column_order=['Regime', 'Segment', 'Start', 'End', 'Duration (Days)', 'Duration_Min'] + (param_cols if isinstance(target_params, list) else ['Mean', 'Std']),
+            column_order=['Selected', 'Regime', 'Segment', 'Start', 'End', 'Duration (Days)', 'Duration_Min'] + (param_cols if isinstance(target_params, list) else ['Mean', 'Std']),
             hide_index=True,
             use_container_width=True,
             height=400,
-            selection_mode="multi-row",
+            key='steady_state_editor'
         )
-        
-        st.caption("💡 **Tip:** Hold `Shift` while clicking column headers to sort by multiple columns.")
-        
-# ==================== TAB 4: Anomaly Detection ====================
 
-elif selected_view == "🚨 Anomaly Detection":
-    st.markdown('<div class="section-header">Anomaly Detection</div>', unsafe_allow_html=True)
-    
-    selected_params_anomaly = st.multiselect(
-        "Choose parameters for anomaly detection",
-        options=list(df.columns),
-        default=(list(num_cols[:2]) if len(num_cols) >= 2 else list(num_cols)),
-        help="Select parameters to detect anomalies",
-        key="anomaly_params"
-    )
-    
-    if not selected_params_anomaly:
-        show_empty_state(
-            "🚨",
-            "No Parameters Selected",
-            "Select parameters from the sidebar to detect anomalies"
-        )
-    else:
-        col1, col2 = st.columns([2, 1])
+        # Sync changes from Data Editor back to Session State
+        if not edited_df.equals(display_df):
+            st.session_state['ss_raw_results'].loc[edited_df.index, 'Selected'] = edited_df['Selected']
         
-        with col1:
-            anomaly_mode = st.selectbox(
-                "Detection Method",
-                ["Z-score", "Isolation Forest"],
-                help="Choose anomaly detection algorithm"
+        # ==================== DOWNLOAD SECTION ====================
+        st.write("")
+        col_d1, col_d2 = st.columns([3, 1])
+        
+        full_df = st.session_state['ss_raw_results']
+        count_selected = full_df['Selected'].sum()
+        
+        with col_d1:
+            if count_selected > 0:
+                st.info(f"📌 **{count_selected}** segments selected for export.")
+            else:
+                st.caption("ℹ️ No segments selected. Export will include ALL segments.")
+
+        with col_d2:
+            if count_selected > 0:
+                df_to_download = full_df[full_df['Selected'] == True]
+            else:
+                df_to_download = full_df
+            
+            csv = df_to_download.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                "⬇️ Download Results",
+                csv,
+                "steady_states_data.csv",
+                "text/csv",
+                key='download-csv-table',
+                use_container_width=True
             )
         
-        with col2:
-            if anomaly_mode == "Z-score":
-                z_thresh = st.slider("Z-score threshold", 2.0, 6.0, 3.0, 0.1)
-        
-        st.markdown("---")
-        
-        if resample_freq is None:
-            keep_idx = thin_index(df_filtered.index, downsample_limit)
-            df_anomaly = df_filtered.iloc[keep_idx]
-        else:
-            df_anomaly = df_filtered
-        
-        anomaly_found = False
-        
-        for col in selected_params_anomaly:
-            s = pd.to_numeric(df_anomaly[col], errors="coerce").dropna()
-            if s.empty:
-                continue
-            
-            if anomaly_mode == "Z-score":
-                z = (s - s.mean()) / (s.std(ddof=0) + 1e-12)
-                mask_anom = z.abs() >= z_thresh
-            else:
-                if IsolationForest is None:
-                    st.error("❌ Isolation Forest requires scikit-learn")
-                    break
-                iso = IsolationForest(contamination="auto", random_state=42)
-                X = s.values.reshape(-1, 1)
-                pred = iso.fit_predict(X)
-                mask_anom = pred == -1
-            
-            if mask_anom.any():
-                anomaly_found = True
-                
-                fig = go.Figure()
-                
-                fig.add_trace(
-                    go.Scatter(
-                        x=s.index,
-                        y=s.values,
-                        mode="lines",
-                        name=col,
-                        line=dict(color="steelblue", width=2)
-                    )
-                )
-                
-                fig.add_trace(
-                    go.Scatter(
-                        x=s.index[mask_anom],
-                        y=s.values[mask_anom],
-                        mode="markers",
-                        name="Anomaly",
-                        marker=dict(color="red", size=10, symbol="x")
-                    )
-                )
-                
-                fig.update_layout(
-                    template=TEMPLATE,
-                    title=f"Anomaly Detection: {col}",
-                    height=400,
-                    hovermode="x unified"
-                )
-                
-                st.plotly_chart(fig, width="stretch")
-                
-                num_anomalies = mask_anom.sum()
-                pct_anomalies = (num_anomalies / len(s)) * 100
-                
-                col_a, col_b, col_c = st.columns(3)
-                col_a.metric("Anomalies Detected", f"{num_anomalies:,}")
-                col_b.metric("Percentage", f"{pct_anomalies:.2f}%")
-                col_c.metric("Method", anomaly_mode)
-                
-                st.markdown("---")
-            else:
-                st.success(f"✅ No anomalies detected in **{col}** using {anomaly_mode}")
-        
-        if not anomaly_found and anomaly_mode != "Isolation Forest":
-            st.info("💡 Try adjusting the threshold or using a different detection method")
+elif selected_view == "🚨 Anomaly Detection":
 
+    # Ensure session key exists (for PDF/report generation later)
+    if "anomaly_results" not in st.session_state:
+        st.session_state["anomaly_results"] = None
+
+    st.markdown('<div class="section-header">Anomaly Detection</div>', unsafe_allow_html=True)
+
+    # 1. Method Selection
+    col_method, col_spacer = st.columns([1, 2])
+    with col_method:
+        anomaly_mode = st.selectbox(
+            "Detection Method",
+            ["Unsupervised Fault Detection"],
+            help="The recommended approach for multivariate process data."
+        )
+
+    # ==================== UNSUPERVISED FAULT DETECTION ====================
+    if anomaly_mode == "Unsupervised Fault Detection":
+        st.markdown("### 🏥 System Health Monitor (Multivariate)")
+        st.info("ℹ️ This module correlates selected sensors to generate a composite 'Health Score'. 100% indicates normal operation; 0% indicates critical deviation.")
+
+        # --- CONSOLIDATED CONFIG PANEL ---
+        st.markdown('<div class="section-header" style="margin-top: 1rem;">1. Model Configuration</div>', unsafe_allow_html=True)
+        with st.container(border=True):
+
+            # -------- Feature Selection --------
+            st.markdown("#### Feature Selection")
+            col_sel, col_info = st.columns([2, 1])
+
+            with col_sel:
+                multi_params = st.multiselect(
+                    "Select Sensors (Correlated Parameters)",
+                    options=st.session_state.get('num_cols', []),
+                    default=st.session_state.get('num_cols', [])[:3]
+                    if len(st.session_state.get('num_cols', [])) >= 3 else None,
+                    help="Select variables that should move together during normal operation."
+                )
+
+            with col_info:
+                st.write("")
+                st.caption("Select at least 2 parameters representing a single asset.")
+
+            st.markdown("---")
+            st.markdown("#### Detection Controls")
+
+            # Detection controls (no Run button here)
+            col_sens, col_clean, col_spacer2 = st.columns([2, 1, 1])
+            with col_sens:
+                sensitivity = st.slider(
+                    "Anomaly Multiplier (Fault Severity)",
+                    min_value=0.01, max_value=3.00,
+                    value=0.10, step=0.10, format="%.2f",
+                    key='anomaly_multiplier_slider'
+                )
+                st.markdown(
+                    '<div style="display:flex; justify-content:space-between;">'
+                    '<small><b>Min: 0.01</b></small>'
+                    '<small><b>Max: 3.00</b></small>'
+                    '</div>',
+                    unsafe_allow_html=True
+                )
+            with col_clean:
+                auto_clean = st.checkbox(
+                    "Exclude Abnormal Events from Baseline",
+                    value=True
+                )
+
+        # ---------- PRE-RUN VALIDATION (still show baseline UI) ----------
+        if len(multi_params) < 2:
+            st.warning("⚠️ Please select at least 2 parameters for Multivariate analysis.")
+            st.stop()
+
+        # Prepare working dataframe (used for baseline UI)
+        df_working = df_filtered[multi_params].dropna()
+        if df_working.empty:
+            st.error("No data available for selected parameters.")
+            st.stop()
+
+        # Step 2: Baseline selection UI
+        st.markdown("---")
+        st.markdown("#### 2. Define Baseline (Normal Operation)")
+
+        ss_results = st.session_state.get('ss_raw_results')
+        has_steady_states = False
+        if ss_results is not None and not ss_results.empty and 'Selected' in ss_results.columns:
+            if ss_results['Selected'].any():
+                has_steady_states = True
+
+        use_steady_state = False
+        training_ranges = []
+
+        if has_steady_states:
+            baseline_source = st.radio(
+                "Baseline Source",
+                ["Use Suggested Baseline (Selected Steady States)", "Manual Time Range"],
+                help="Select 'Suggested' to use steady state periods."
+            )
+
+            if baseline_source == "Use Suggested Baseline (Selected Steady States)":
+                use_steady_state = True
+                selected_ss = ss_results[ss_results['Selected'] == True]
+                st.success(f"✅ Using {len(selected_ss)} confirmed steady state segments as baseline model.")
+                train_slices = []
+                for _, row in selected_ss.iterrows():
+                    s, e = row['Start'], row['End']
+                    slice_df = df_working[(df_working.index >= s) & (df_working.index <= e)]
+                    if not slice_df.empty:
+                        train_slices.append(slice_df)
+                        training_ranges.append((s, e))
+                if train_slices:
+                    df_train = pd.concat(train_slices)
+                else:
+                    st.error("Selected segments contain no data matching current filters.")
+                    st.stop()
+
+        # Manual baseline selection
+        if not use_steady_state:
+            min_t, max_t = df_working.index.min(), df_working.index.max()
+            # create 4 columns for date/time inputs (no Run button here)
+            c1, c2, c3, c4 = st.columns([1, 0.6, 1, 0.6])
+
+            with c1:
+                train_start = st.date_input("Start Date", value=min_t, min_value=min_t, max_value=max_t)
+            with c2:
+                t_start_time = st.time_input("Start Time", value=min_t.time())
+            with c3:
+                train_end = st.date_input("End Date", value=min_t + pd.Timedelta(days=30) if (min_t + pd.Timedelta(days=1)) <= max_t else max_t, min_value=min_t, max_value=max_t)
+            with c4:
+                t_end_time = st.time_input("End Time", value=max_t.time())
+
+            full_train_start = pd.Timestamp(f"{train_start} {t_start_time}")
+            full_train_end = pd.Timestamp(f"{train_end} {t_end_time}")
+
+            if full_train_start >= full_train_end:
+                st.error("⚠️ Start time must be before End time.")
+                st.stop()
+
+            df_train = df_working[(df_working.index >= full_train_start) & (df_working.index <= full_train_end)]
+            training_ranges.append((full_train_start, full_train_end))
+
+        # If user used suggested baseline but no training ranges available -> stop
+        if use_steady_state and len(training_ranges) == 0:
+            st.error("No training ranges available from suggested steady states.")
+            st.stop()
+
+        # ---------- Section 3 header and run button placement ----------     
+        st.markdown("---")
+        st.markdown("#### 3. Health Monitor")
+
+        st.markdown("""
+                    <style>
+
+                        /* Remove the colored middle track between the two slider handles */
+                        div[data-baseweb="slider"] div[role="slider"] + div > div {
+                            background: transparent !important;
+                        }
+
+                        /* Alternative catch-all: remove any colored bar shorter than the handle */
+                        div[data-baseweb="slider"] div {
+                            min-height: 10px !important;   /* keep handles unchanged */
+                        }
+
+                        div[data-baseweb="slider"] div:not(:has(div)) {
+                            background: #dee2e6 !important;    /* normal track color */
+                        }
+
+                    </style>
+                    """, unsafe_allow_html=True)
+        # Layout: slider (big) | metric | run button aligned right
+        col_slider, col_metric, col_btn = st.columns([3, 0.8, 0.8])
+
+        # Slider area (we still let user adjust thresholds before/after run)
+        with col_slider:
+            # Dual-handle slider returns a tuple (lower_bound, upper_bound)
+            thresholds = st.slider(
+                "Health Zones Configuration",
+                min_value=0, 
+                max_value=100, 
+                value=(40, 70), # Default: Critical < 40, Warning 40-70, Healthy > 70
+                step=1,
+                help="Adjust handles to define zones:\n• 0 to Lower Handle: 🚨 Critical\n• Lower to Upper Handle: ⚠️ Warning\n• Upper Handle to 100: ✅ Healthy"
+            )
+            thresh_crit, thresh_warn = thresholds
+            st.markdown(
+                f"<div style='display:flex; justify-content:space-between; font-size:12px; color:#666;'>"
+                f"<span>🚨 <b>Critical</b> (0-{thresh_crit}%)</span>"
+                f"<span>⚠️ <b>Warning</b> ({thresh_crit}-{thresh_warn}%)</span>"
+                f"<span>✅ <b>Healthy</b> ({thresh_warn}-100%)</span>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+
+        # Metric area: show latest health if model run; otherwise show placeholder
+        with col_metric:
+            if st.session_state.get("anomaly_results") is not None:
+                # show stored latest health if present
+                stored = st.session_state["anomaly_results"]
+                latest_health = stored.get("latest_health", None)
+                latest_delta = stored.get("latest_delta", None)
+                if latest_health is not None:
+                    st.metric("Latest Health Score", f"{latest_health:.1f}%", f"{latest_delta:+.2f}%")
+                else:
+                    st.metric("Latest Health Score", "N/A", "")
+            else:
+                st.metric("Latest Health Score", "N/A", "")
+
+        # Run Model button on the right of the metric
+        with col_btn:
+            st.write("")  # visual alignment
+            run_model = st.button("🚀 Run Model", type="primary", key="run_button_health")
+
+        # =========================================================
+        #  LOGIC PART A: MODEL EXECUTION (Only runs on click)
+        # =========================================================
+        if run_model:
+            with st.spinner("Analyzing system health..."):
+                try:
+                    # Basic validation
+                    if len(df_train) < len(multi_params) + 5:
+                        st.error("❌ Not enough training data. Please select a wider range or more steady state segments.")
+                        st.stop()
+
+                    # --- MODEL FITTING ---
+                    mu = df_train.mean().values
+                    cov = np.cov(df_train.values.T)
+                    inv_cov = np.linalg.pinv(cov)
+
+                    # Auto-clean baseline
+                    if auto_clean:
+                        diff_train = df_train.values - mu
+                        left_train = np.dot(diff_train, inv_cov)
+                        mahal_sq_train = np.sum(left_train * diff_train, axis=1)
+                        clean_limit = chi2.ppf(0.99, df=len(multi_params))
+                        clean_mask = mahal_sq_train <= clean_limit
+                        if clean_mask.sum() > len(multi_params) + 2:
+                            df_train_clean = df_train[clean_mask]
+                            mu = df_train_clean.mean().values
+                            cov = np.cov(df_train_clean.values.T)
+                            inv_cov = np.linalg.pinv(cov)
+                            removed_count = len(df_train) - len(df_train_clean)
+                            if removed_count > 0:
+                                st.caption(f"✨ Auto-cleaned baseline: Removed {removed_count} outliers from training data.")
+
+                    # --- SCORING ON FULL DATASET ---
+                    # We work on a copy to avoid mutating the original repeatedly
+                    df_calc = df_working.copy()
+                    
+                    diff = df_calc.values - mu
+                    left = np.dot(diff, inv_cov)
+                    contrib_raw = left * diff
+                    mahal_sq = np.sum(contrib_raw, axis=1)
+                    df_calc['Mahalanobis_Dist'] = np.sqrt(mahal_sq)
+
+                    # Contribution %
+                    contrib_abs = np.abs(contrib_raw)
+                    contrib_sum = np.sum(contrib_abs, axis=1)
+                    contrib_sum[contrib_sum == 0] = 1.0
+                    contrib_pcts = (contrib_abs / contrib_sum[:, None]) * 100
+
+                    hover_strs = pd.Series("", index=df_calc.index)
+                    for idx, col_name in enumerate(multi_params):
+                        hover_strs += f"<b>{col_name}:</b> " + pd.Series(contrib_pcts[:, idx], index=df_calc.index).map('{:.1f}%'.format) + "<br>"
+                    df_calc['Hover_Info'] = hover_strs
+
+                    # Health Score transform
+                    degrees_of_freedom = len(multi_params)
+                    base_limit = np.sqrt(chi2.ppf(0.999, df=degrees_of_freedom))
+                    adjusted_limit = base_limit / sensitivity
+                    target_health = 0.70
+                    k = np.log(target_health) / (adjusted_limit**2)
+                    df_calc['Health_Score'] = 100 * np.exp(k * (df_calc['Mahalanobis_Dist']**2))
+                    df_calc['Health_Score'] = df_calc['Health_Score'].clip(0, 100)
+
+                    # Update statuses based on thresholds user selected
+                    conditions = [
+                        (df_calc['Health_Score'] <= thresh_crit),
+                        (df_calc['Health_Score'] <= thresh_warn) & (df_calc['Health_Score'] > thresh_crit),
+                        (df_calc['Health_Score'] > thresh_warn)
+                    ]
+                    choices = ['Critical', 'Warning', 'Healthy']
+                    df_calc['Status'] = np.select(conditions, choices, default='Healthy')
+
+                    # ---------- VISUALIZATION (fig_health) ----------
+                    fig_health = make_subplots(
+                        rows=2, cols=1, shared_xaxes=True,
+                        row_heights=[0.55, 0.45], vertical_spacing=0.12,
+                        subplot_titles=("System Health Score", "Raw Parameter Trends (Overlaid)")
+                    )
+
+                    # Zones
+                    fig_health.add_hrect(y0=thresh_warn, y1=100, fillcolor="#EAFAF1", opacity=0.7, line_width=0, layer="below", row=1, col=1)
+                    fig_health.add_hrect(y0=thresh_crit, y1=thresh_warn, fillcolor="#FEF9E7", opacity=0.7, line_width=0, layer="below", row=1, col=1)
+                    fig_health.add_hrect(y0=0, y1=thresh_crit, fillcolor="#FDEDEC", opacity=0.7, line_width=0, layer="below", row=1, col=1)
+
+                    # Health score trace
+                    fig_health.add_trace(go.Scatter(
+                        x=df_calc.index, y=df_calc['Health_Score'],
+                        mode='lines', name='Health Score',
+                        line=dict(color='#17202A', width=2.5),
+                        customdata=df_calc['Hover_Info'],
+                        hovertemplate='<b>Health: %{y:.1f}%</b><br><br>Contribution:<br>%{customdata}<extra></extra>'
+                    ), row=1, col=1)
+
+                    # time region shading (warning / critical)
+                    health = df_calc['Health_Score']
+                    warning_mask = (health <= thresh_warn) & (health > thresh_crit)
+                    critical_mask = (health <= thresh_crit)
+
+                    def add_time_regions(mask, fillcolor, opacity):
+                        mask = mask.astype(int)
+                        diff = mask.diff().fillna(0)
+                        starts = list(mask.index[diff == 1])
+                        ends = list(mask.index[diff == -1])
+                        if mask.iloc[0] == 1:
+                            starts.insert(0, mask.index[0])
+                        if mask.iloc[-1] == 1:
+                            ends.append(mask.index[-1])
+                        for s, e in zip(starts, ends):
+                            fig_health.add_vrect(x0=s, x1=e, fillcolor=fillcolor, opacity=opacity, line_width=0, layer="below", row=1, col=1)
+
+                    add_time_regions(warning_mask, fillcolor="rgba(255, 215, 0, 0.60)", opacity=0.40)
+                    add_time_regions(critical_mask, fillcolor="rgba(255, 140, 0, 0.50)", opacity=0.40)
+
+                    # thresholds lines
+                    fig_health.add_hline(y=thresh_warn, line_dash="dash", line_color="#F39C12", row=1, col=1)
+                    fig_health.add_hline(y=thresh_crit, line_dash="dash", line_color="#E74C3C", row=1, col=1)
+
+                    # highlight baseline training ranges
+                    for (rng_start, rng_end) in training_ranges:
+                        fig_health.add_vrect(x0=rng_start, x1=rng_end, line_width=0, fillcolor="#C1DBEF", opacity=0.6, annotation_text="Baseline", annotation_position="top right", row=1, col=1)
+
+                    # Raw parameter lines (row 2)
+                    colors = px.colors.qualitative.Bold
+                    for idx, col in enumerate(multi_params):
+                        fig_health.add_trace(go.Scatter(
+                            x=df_calc.index, y=df_calc[col],
+                            mode='lines', name=col,
+                            opacity=0.8, line=dict(width=1.3, color=colors[idx % len(colors)]),
+                            hovertemplate=f"<b>{col}</b>: %{{y:.2f}}<extra></extra>"
+                        ), row=2, col=1)
+
+                    # layout
+                    fig_health.update_yaxes(title_text="<b>Health %</b>", range=[0, 105], showgrid=True, gridcolor='#F2F4F7', row=1, col=1)
+                    fig_health.update_yaxes(title_text="<b>Raw Value</b>", showgrid=True, gridcolor='#F2F4F7', row=2, col=1)
+                    fig_health.update_xaxes(showgrid=True, gridcolor='#F2F4F7')
+                    fig_health.update_layout(template="plotly_white", height=700, hovermode="x unified", margin=dict(t=60, b=50, l=60, r=40),
+                                            title={'text': "<b>System Health Monitor (Multivariate)</b>", 'y': 0.96, 'x': 0.5, 'xanchor': 'center', 'yanchor': 'top'},
+                                            legend=dict(orientation="h", yanchor="top", y=-0.15, xanchor="center", x=0.5))
+
+                    # ---------------- SAVE RESULTS TO SESSION STATE ----------------
+                    health_chart_path = "/mnt/data/health_chart.png"
+                    raw_chart_path = "/mnt/data/raw_chart.png"
+                    
+                    crit_count = (df_calc['Status'] == 'Critical').sum()
+                    warn_count = (df_calc['Status'] == 'Warning').sum()
+                    healthy_pct = (df_calc['Status'] == 'Healthy').mean() * 100
+
+                    latest_health = df_calc['Health_Score'].iloc[-1]
+                    latest_delta = (df_calc['Health_Score'].iloc[-1] - df_calc['Health_Score'].iloc[-2]) if len(df_calc) > 1 else 0.0
+
+                    # Store everything we need
+                    st.session_state["anomaly_df_working"] = df_calc
+                    st.session_state["fig_health"] = fig_health
+                    st.session_state["anomaly_multi_params"] = multi_params
+                    st.session_state["anomaly_results"] = {
+                        "multi_params": multi_params,
+                        "training_ranges": training_ranges,
+                        "sensitivity": sensitivity,
+                        "auto_clean": auto_clean,
+                        "thresh_crit": thresh_crit,
+                        "thresh_warn": thresh_warn,
+                        "crit_count": crit_count,
+                        "warn_count": warn_count,
+                        "healthy_pct": healthy_pct,
+                        "health_chart_path": health_chart_path,
+                        "raw_chart_path": raw_chart_path,
+                        "latest_health": latest_health,
+                        "latest_delta": latest_delta
+                    }
+                    
+                    st.rerun() # Refresh to show results immediately
+
+                except np.linalg.LinAlgError:
+                    st.error("❌ Singular Matrix Error: Variables are perfectly correlated. Remove duplicate parameters.")
+                except Exception as e:
+                    handle_error(e, "Health Calc")
+
+        # =========================================================
+        #  LOGIC PART B: PERSISTENT DISPLAY (Runs if data exists)
+        # =========================================================
+        
+        # Check if we have results in session state
+        if st.session_state.get("anomaly_results") is not None and "fig_health" in st.session_state:
+            
+            st.markdown("### 📊 Health Analysis Results")
+            st.caption("⚠️ Note: Raw trends are overlaid; differing units/scales may dominate the Y-axis.")
+            
+            # Display the persistent chart
+            st.plotly_chart(
+                st.session_state["fig_health"], 
+                width="stretch", 
+                config={'displayModeBar': True, 'displaylogo': False},
+                key="health_monitor_chart_persistent"
+            )
+
+        # =========================================================
+        #  LOGIC PART C: REPORT GENERATION (Appears after chart)
+        # =========================================================
+
+        st.markdown("---")
+        st.markdown('<div class="section-header">📄 Anomaly Detection Report</div>', unsafe_allow_html=True)
+
+        if st.session_state.get("anomaly_results") is not None:
+            # Create report generation UI
+            col_report1, col_report2 = st.columns([2, 1])
+
+            with col_report1:
+                st.markdown("### Generate Comprehensive Report")
+                st.info("📋 Generate a detailed report including model configuration, statistics, visualizations, and anomaly details.")
+                
+            with col_report2:
+                st.write("")
+                st.write("")
+                generate_report = st.button("📊 Generate Report", type="primary", key="generate_anomaly_report")
+
+            if generate_report:
+                with st.spinner("Generating comprehensive anomaly detection report..."):
+                    try:
+                        from datetime import datetime
+                        import io
+                        
+                        # Retrieve stored results
+                        results = st.session_state["anomaly_results"]
+                        df_calc = st.session_state["anomaly_df_working"]
+                        multi_params = st.session_state.get("anomaly_multi_params", results.get("multi_params", []))
+                        
+                        crit_count = results["crit_count"]
+                        warn_count = results["warn_count"]
+                        healthy_pct = results["healthy_pct"]
+                        latest_health = results["latest_health"]
+                        sensitivity = results["sensitivity"]
+                        auto_clean = results["auto_clean"]
+                        
+                        # Prepare report data
+                        report_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        
+                        # 1. Summary Stats
+                        summary_stats = pd.DataFrame({
+                            "Metric": [
+                                "Total Data Points", "Critical Events", "Warning Events", 
+                                "Healthy Percentage", "Latest Health Score", "Average Health Score",
+                                "Minimum Health Score", "Parameters Monitored", "Sensitivity Setting", "Auto-Clean Enabled"
+                            ],
+                            "Value": [
+                                f"{len(df_calc):,}", f"{crit_count:,}", f"{warn_count:,}",
+                                f"{healthy_pct:.2f}%", f"{latest_health:.2f}%",
+                                f"{df_calc['Health_Score'].mean():.2f}%",
+                                f"{df_calc['Health_Score'].min():.2f}%",
+                                ", ".join(multi_params), f"{sensitivity:.2f}",
+                                "Yes" if auto_clean else "No"
+                            ]
+                        })
+                        
+                        # 2. Anomaly Details
+                        anomaly_df = df_calc[df_calc['Status'].isin(['Critical', 'Warning'])].copy()
+                        if not anomaly_df.empty:
+                            anomaly_df = anomaly_df.reset_index()
+                            # Safe column selection
+                            timestamp_col = df_calc.index.name or 'Timestamp'
+                            desired_cols = [timestamp_col, 'Health_Score', 'Status'] + multi_params
+                            avail_cols = [c for c in desired_cols if c in anomaly_df.columns]
+                            anomaly_df = anomaly_df[avail_cols]
+                        
+                        # 3. Status Dist
+                        status_distribution = df_calc['Status'].value_counts().reset_index()
+                        status_distribution.columns = ['Status', 'Count']
+                        status_distribution['Percentage'] = (status_distribution['Count'] / len(df_calc) * 100).round(2)
+                        
+                        # --- DISPLAY REPORT ---
+                        st.success("✅ Report Generated Successfully!")
+                        
+                        # Executive Summary
+                        st.markdown(f"""
+                        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                                    padding: 2rem; border-radius: 12px; color: white; margin-bottom: 2rem;">
+                            <h2 style="margin: 0; color: white;">🚨 Anomaly Detection Report</h2>
+                            <p style="margin: 0.5rem 0 0 0; opacity: 0.9;">Generated: {report_timestamp}</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        c1, c2, c3, c4 = st.columns(4)
+                        c1.metric("Total Points", f"{len(df_calc):,}")
+                        c2.metric("Critical Events", f"{crit_count:,}", delta=f"{(crit_count/len(df_calc)*100):.1f}%", delta_color="inverse")
+                        c3.metric("Warning Events", f"{warn_count:,}", delta=f"{(warn_count/len(df_calc)*100):.1f}%", delta_color="inverse")
+                        c4.metric("Healthy %", f"{healthy_pct:.1f}%", delta=f"{healthy_pct-100:.1f}%", delta_color="normal")
+                        
+                        st.markdown("---")
+                        
+                        # Tables and Charts
+                        st.markdown("### ⚙️ Model Configuration")
+                        st.dataframe(summary_stats, use_container_width=True, hide_index=True)
+                        
+                        st.markdown("### 📉 Status Distribution")
+                        c1, c2 = st.columns([1, 2])
+                        with c1:
+                            st.dataframe(status_distribution, use_container_width=True, hide_index=True)
+                        with c2:
+                            fig_pie = go.Figure(data=[go.Pie(
+                                labels=status_distribution['Status'],
+                                values=status_distribution['Count'],
+                                marker=dict(colors=['#10B981', '#F59E0B', '#EF4444']),
+                                hole=0.4
+                            )])
+                            fig_pie.update_layout(title="Health Status Distribution", height=300)
+                            st.plotly_chart(fig_pie, use_container_width=True)
+                        
+                        st.markdown("### 🚨 Detected Anomaly Events")
+                        if not anomaly_df.empty:
+                            st.dataframe(anomaly_df.head(100), use_container_width=True)
+                        else:
+                            st.success("✅ No anomalies detected!")
+
+                        # Export Buttons
+                        st.markdown("### 💾 Export Report Data")
+                        ec1, ec2, ec3 = st.columns(3)
+                        
+                        with ec1:
+                            buffer_excel = io.BytesIO()
+                            with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
+                                summary_stats.to_excel(writer, sheet_name='Summary', index=False)
+                                status_distribution.to_excel(writer, sheet_name='Distribution', index=False)
+                                if not anomaly_df.empty: anomaly_df.to_excel(writer, sheet_name='Anomalies', index=False)
+                                df_calc.to_excel(writer, sheet_name='Full Results', index=True)
+                            
+                            st.download_button("📊 Download Excel Report", buffer_excel.getvalue(), f"report_{datetime.now().strftime('%Y%m%d')}.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+                        with ec2:
+                            if not anomaly_df.empty:
+                                st.download_button("📄 Download Anomalies CSV", anomaly_df.to_csv(index=False).encode('utf-8'), "anomalies.csv", "text/csv")
+                            else:
+                                st.button("📄 Download Anomalies CSV", disabled=True)
+
+                        with ec3:
+                             st.download_button("📋 Download Full Results CSV", df_calc.to_csv().encode('utf-8'), "full_results.csv", "text/csv")
+
+                    except Exception as e:
+                        st.error(f"❌ Error generating report: {str(e)}")
+                        # Debug info
+                        # st.write(e) 
+
+        else:
+            st.info("ℹ️ Run the anomaly detection model first to generate a report.")  
 # ==================== TAB 4: Export ====================
 
 elif selected_view == "📤 Export":
