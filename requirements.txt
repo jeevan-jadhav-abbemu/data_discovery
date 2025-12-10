@@ -1,21 +1,11 @@
-# Core application framework and data handling
-streamlit
-pandas
-numpy
-matplotlib
-
-# Advanced visualization libraries
-plotly
-kaleido  # Required for exporting static Plotly figures (e.g., to PNG/SVG)
-
-# Time Series analysis and modeling
-statsmodels
-
-# Dependencies for reading different file formats (used by pandas)
-openpyxl  # For reading Excel (.xlsx, .xls) files
-pyarrow   # For reading Parquet (.parquet) files
-
-# --- Optional Machine Learning & Advanced Time Series (Used under try/except blocks) ---
-# The code provides fallbacks for these, but they are required to enable all features
-scikit-learn # Enables PCA, KMeans, and Isolation Forest
-prophet      # Enables Prophet time series forecasting
+streamlit==1.28.1
+pandas==2.1.3
+numpy==1.24.3
+plotly==5.18.0
+statsmodels==0.14.0
+scipy==1.11.4
+matplotlib==3.8.2
+scikit-learn==1.3.2
+prophet==1.1.5
+openpyxl==3.11.0
+pyarrow==13.0.0
