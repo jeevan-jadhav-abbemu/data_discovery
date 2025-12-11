@@ -1,85 +1,79 @@
+# =====================================================================
+# DATA INSIGHTS HUB - IMPORTS
+# =====================================================================
+# Professional time-series data exploration and visualization platform
+
+# Standard Library
 from __future__ import annotations
 import os
-
-os.environ["OMP_NUM_THREADS"] = "1"
-
 import io
 import math
 import time
 import hashlib
 from typing import List, Tuple, Optional, Any, Dict
+from datetime import datetime
+
+# Third-party: Scientific & Data Processing
 import numpy as np
 import pandas as pd
-import streamlit as st
+from scipy.stats import chi2
+
+# Third-party: Visualization
 import plotly.graph_objs as go
 import plotly.express as px
 from plotly.subplots import make_subplots
 import plotly.figure_factory as ff
-from statsmodels.tsa.seasonal import seasonal_decompose
-from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-from scipy.stats import chi2
 
-# ===================== SIMPLE PASSWORD PROTECTION =====================
-def authenticate_user():
-    """Simple front-end password gate."""
-    if "password_ok" not in st.session_state:
-        st.session_state["password_ok"] = False
+# Third-party: Time Series
+from statsmodels.tsa.seasonal import seasonal_decompose
+from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 
-    # Show login form if not authenticated
-    if not st.session_state["password_ok"]:
-        st.markdown("## 🔐 Enter Password to Access Application")
+# Third-party: Web Framework
+import streamlit as st
 
-        entered_password = st.text_input(
-            "Password", 
-            type="password", 
-            placeholder="Enter password to continue"
-        )
-
-        if st.button("Login"):
-            try:
-                correct_password = st.secrets.get("PASSWORD", "")
-                if entered_password == correct_password:
-                    st.session_state["password_ok"] = True
-                    st.rerun()
-                else:
-                    st.error("❌ Incorrect password")
-            except Exception as e:
-                st.error(f"❌ Authentication error: {str(e)}")
-
-        st.stop()  # stop execution until logged in
-
-# Call the authentication gate
-authenticate_user()
+# =====================================================================
+# ENVIRONMENT SETUP
 # =====================================================================
 
+os.environ["OMP_NUM_THREADS"] = "1"
 
-if "sidebar_state_set" not in st.session_state:
-    st.session_state.sidebar_state_set = True
-    st.markdown("""
-        <script>
-        // Collapse sidebar
-        window.parent.document.querySelector("section[data-testid='stSidebar']").style.display = 'none';
-        // Expand icon stays clickable
-        </script>
-    """, unsafe_allow_html=True)
-    
-# Optional imports (graceful fallbacks)
+# =====================================================================
+# CONSTANTS & CONFIGURATION
+# =====================================================================
+
+# Plotly Theme Configuration
+TEMPLATE = "plotly_white"
+PAPER_BG = "white"
+PLOT_BG = "white"
+FONT_COLOR = "#0E1117"
+GRID_COLOR = "#E5ECF6"
+FONT_PRIMARY = "#0E1117"
+FONT_SIZE_TICK = 11
+STANDARD_MARGIN = dict(l=60, r=40, t=50, b=60)
+GRID_WIDTH = 1
+
+# =====================================================================
+# CONDITIONAL IMPORTS (with Fallbacks)
+# =====================================================================
+
+# Scikit-learn (Optional)
 SKLEARN_AVAILABLE = False
 try:
     from sklearn.decomposition import PCA as SkPCA
     from sklearn.cluster import KMeans as SkKMeans
-    from sklearn.cluster import MiniBatchKMeans as SkMiniBatchKMeans  # NEW
+    from sklearn.cluster import MiniBatchKMeans as SkMiniBatchKMeans
     from sklearn.metrics import silhouette_score
     PCA = SkPCA
     KMeans = SkKMeans
-    MiniBatchKMeans = SkMiniBatchKMeans  # NEW
+    MiniBatchKMeans = SkMiniBatchKMeans
     SKLEARN_AVAILABLE = True
 except Exception:
-    MiniBatchKMeans = None  # NEW
+    MiniBatchKMeans = None
     
     class PCA:
+        """Fallback PCA implementation when scikit-learn unavailable"""
         def __init__(self, n_components=2, random_state=None):
             self.n_components = n_components
             self.random_state = random_state
@@ -96,6 +90,7 @@ except Exception:
             return np.dot(Xc, self.components_.T)
 
     class KMeans:
+        """Fallback KMeans implementation when scikit-learn unavailable"""
         def __init__(self, n_clusters=8, n_init=10, random_state=None, max_iter=300):
             self.n_init = int(n_init)
             self.n_clusters = int(n_clusters)
@@ -128,6 +123,48 @@ try:
 except Exception:
     Prophet = None
 
+# =====================================================================
+# SESSION STATE INITIALIZATION
+# =====================================================================
+
+def _initialize_session_state():
+    """Initialize all session state variables at app startup"""
+    if "events" not in st.session_state:
+        st.session_state["events"] = []
+    if "user_prefs" not in st.session_state:
+        st.session_state["user_prefs"] = {
+            "default_chart": "Time Series Trend",
+            "show_stats": False,
+        }
+    if 'df' not in st.session_state:
+        st.session_state['df'] = None
+        st.session_state['prev_datetime_col'] = None
+        st.session_state['prev_dayfirst'] = None
+        st.session_state['prev_file_hash'] = None
+        st.session_state['num_cols'] = []
+        st.session_state['cat_cols'] = []
+        st.session_state['prev_df_id_for_types'] = None
+    if 'df_filtered' not in st.session_state:
+        st.session_state['df_filtered'] = None
+        st.session_state['prev_start_date'] = None
+        st.session_state['prev_end_date'] = None
+        st.session_state['prev_missing_strategy'] = None
+        st.session_state['prev_filters_tuple'] = None
+        st.session_state['prev_resample_freq'] = None
+        st.session_state['prev_df_id'] = None
+    if 'ss_k' not in st.session_state: st.session_state['ss_k'] = 3
+    if 'ss_window' not in st.session_state: st.session_state['ss_window'] = "1H"
+    if 'ss_threshold' not in st.session_state: st.session_state['ss_threshold'] = 1.0
+    if 'ss_duration' not in st.session_state: st.session_state['ss_duration'] = 60
+    if 'uploaded_file' not in st.session_state:
+        st.session_state['uploaded_file'] = None
+
+_initialize_session_state()
+
+# =====================================================================
+# STREAMLIT PAGE CONFIG
+# =====================================================================
+
 # Page Config
 st.set_page_config(
     page_title="Data Insights Hub",
@@ -135,6 +172,36 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# =====================================================================
+# AUTHENTICATION
+# =====================================================================
+
+def authenticate_user():
+    """Simple front-end password gate"""
+    if "password_ok" not in st.session_state:
+        st.session_state["password_ok"] = False
+
+    if not st.session_state["password_ok"]:
+        st.markdown("## 🔐 Enter Password to Access Application")
+        entered_password = st.text_input(
+            "Password", 
+            type="password", 
+            placeholder="Enter password to continue"
+        )
+        if st.button("Login"):
+            try:
+                correct_password = st.secrets.get("PASSWORD", "")
+                if entered_password == correct_password:
+                    st.session_state["password_ok"] = True
+                    st.rerun()
+                else:
+                    st.error("❌ Incorrect password")
+            except Exception as e:
+                st.error(f"❌ Authentication error: {str(e)}")
+        st.stop()
+
+authenticate_user()
 
 # Enhanced CSS with industry-standard styling
 st.markdown("""
@@ -940,56 +1007,86 @@ def calculate_chart_height(num_series: int, base_height: int = 300, height_per_s
     """Calculate responsive chart height"""
     return min(base_height + (num_series - 1) * height_per_series, 800)
 
-# ==================== Session State Initialization ====================
+# =====================================================================
+# SESSION STATE INITIALIZATION (Early initialization for all features)
+# =====================================================================
 
-if "events" not in st.session_state:
-    st.session_state["events"] = []
-
-if "user_prefs" not in st.session_state:
-    st.session_state["user_prefs"] = {
-        "default_chart": "Time Series Trend",
-        "show_stats": False,
-    }
-
-if 'df' not in st.session_state:
-    st.session_state['df'] = None
-    st.session_state['prev_datetime_col'] = None
-    st.session_state['prev_dayfirst'] = None
-    st.session_state['prev_file_hash'] = None
-    st.session_state['num_cols'] = []
-    st.session_state['cat_cols'] = []
-    st.session_state['prev_df_id_for_types'] = None
-
-if 'df_filtered' not in st.session_state:
-    st.session_state['df_filtered'] = None
-    st.session_state['prev_start_date'] = None
-    st.session_state['prev_end_date'] = None
-    st.session_state['prev_missing_strategy'] = None
-    st.session_state['prev_filters_tuple'] = None
-    st.session_state['prev_resample_freq'] = None
-    st.session_state['prev_df_id'] = None
-
-# Initialize Steady State Parameters in Session State
-if 'ss_k' not in st.session_state: st.session_state['ss_k'] = 3
-if 'ss_window' not in st.session_state: st.session_state['ss_window'] = "1H"
-if 'ss_threshold' not in st.session_state: st.session_state['ss_threshold'] = 1.0
-if 'ss_duration' not in st.session_state: st.session_state['ss_duration'] = 60
-
-# ==================== Main Header ====================
-
-if st.session_state.get('uploaded_file') is not None:
-    st.markdown('<div class="main-title">📊 Data Insights Hub</div>', unsafe_allow_html=True)
-    st.markdown('<div class="subtitle">Professional time-series data exploration and visualization platform</div>', unsafe_allow_html=True)
-else:
-    pass
-
-# ==================== Sidebar ====================
-
-with st.sidebar:
-    st.markdown("### 📁 Data Source")
+def _initialize_session_state():
+    """Initialize all session state variables"""
     
+    # Events tracking
+    if "events" not in st.session_state:
+        st.session_state["events"] = []
+
+    # User preferences
+    if "user_prefs" not in st.session_state:
+        st.session_state["user_prefs"] = {
+            "default_chart": "Time Series Trend",
+            "show_stats": False,
+        }
+
+    # Raw dataframe state
+    if 'df' not in st.session_state:
+        st.session_state['df'] = None
+        st.session_state['prev_datetime_col'] = None
+        st.session_state['prev_dayfirst'] = None
+        st.session_state['prev_file_hash'] = None
+        st.session_state['num_cols'] = []
+        st.session_state['cat_cols'] = []
+        st.session_state['prev_df_id_for_types'] = None
+
+    # Filtered dataframe state
+    if 'df_filtered' not in st.session_state:
+        st.session_state['df_filtered'] = None
+        st.session_state['prev_start_date'] = None
+        st.session_state['prev_end_date'] = None
+        st.session_state['prev_missing_strategy'] = None
+        st.session_state['prev_filters_tuple'] = None
+        st.session_state['prev_resample_freq'] = None
+        st.session_state['prev_df_id'] = None
+
+    # Steady State parameters
+    if 'ss_k' not in st.session_state: 
+        st.session_state['ss_k'] = 3
+    if 'ss_window' not in st.session_state: 
+        st.session_state['ss_window'] = "1H"
+    if 'ss_threshold' not in st.session_state: 
+        st.session_state['ss_threshold'] = 1.0
+    if 'ss_duration' not in st.session_state: 
+        st.session_state['ss_duration'] = 60
+
+    # Upload file state
     if 'uploaded_file' not in st.session_state:
         st.session_state['uploaded_file'] = None
+
+    # Sidebar state
+    if "sidebar_state_set" not in st.session_state:
+        st.session_state.sidebar_state_set = True
+        st.markdown("""
+            <script>
+            window.parent.document.querySelector("section[data-testid='stSidebar']").style.display = 'none';
+            </script>
+        """, unsafe_allow_html=True)
+
+# Initialize session state early
+_initialize_session_state()
+
+# =====================================================================
+# STREAMLIT PAGE CONFIG
+# =====================================================================
+
+st.set_page_config(
+    page_title="Data Insights Hub",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# =====================================================================
+# AUTHENTICATION FUNCTION
+# =====================================================================
+
+def authenticate_user():
     
     expand_upload = st.session_state['uploaded_file'] is None
     
@@ -1031,8 +1128,6 @@ try:
     if _bytes and file_name:
         with st.spinner('📂 Loading data...'):
             df_raw = load_dataframe(_bytes, file_name)
-            if df_raw is not None:
-                st.sidebar.success(f"✅ Loaded {len(df_raw):,} rows")
 except Exception as e:
     if uploaded_file is not None:
         handle_error(e, "Data Loading")
@@ -1122,100 +1217,6 @@ if df_raw is None or df_raw.empty:
                 with st.spinner("🔄 Loading data..."):
                     time.sleep(0.5)
                 st.rerun()
-    
-    # How It Works Section
-    st.markdown("""
-    <div style="text-align: center; margin: 4rem 0 3rem 0;">
-        <h2 style="color: #1F2A44; font-size: 36px; font-weight: 700; margin-bottom: 0.5rem;">
-            How It Works
-        </h2>
-        <p style="color: #6B7280; font-size: 16px;">
-            Get started in three simple steps
-        </p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    steps_col1, steps_col2, steps_col3 = st.columns(3)
-    
-    with steps_col1:
-        st.markdown("""
-        <div style="text-align: center; padding: 2rem;">
-            <div style="
-                width: 80px;
-                height: 80px;
-                border-radius: 50%;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 32px;
-                font-weight: 700;
-                margin: 0 auto 1.5rem auto;
-                box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
-            ">1</div>
-            <h4 style="color: #1F2A44; font-size: 20px; font-weight: 600; margin-bottom: 0.75rem;">
-                Upload Your Data
-            </h4>
-            <p style="color: #6B7280; font-size: 14px; line-height: 1.6;">
-                Import CSV, Excel, or Parquet files containing your time-series data
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with steps_col2:
-        st.markdown("""
-        <div style="text-align: center; padding: 2rem;">
-            <div style="
-                width: 80px;
-                height: 80px;
-                border-radius: 50%;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 32px;
-                font-weight: 700;
-                margin: 0 auto 1.5rem auto;
-                box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
-            ">2</div>
-            <h4 style="color: #1F2A44; font-size: 20px; font-weight: 600; margin-bottom: 0.75rem;">
-                Explore & Visualize
-            </h4>
-            <p style="color: #6B7280; font-size: 14px; line-height: 1.6;">
-                Interact with powerful charts, correlations, and statistical analysis tools
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    with steps_col3:
-        st.markdown("""
-        <div style="text-align: center; padding: 2rem;">
-            <div style="
-                width: 80px;
-                height: 80px;
-                border-radius: 50%;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 32px;
-                font-weight: 700;
-                margin: 0 auto 1.5rem auto;
-                box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
-            ">3</div>
-            <h4 style="color: #1F2A44; font-size: 20px; font-weight: 600; margin-bottom: 0.75rem;">
-                Export Insights
-            </h4>
-            <p style="color: #6B7280; font-size: 14px; line-height: 1.6;">
-                Download filtered data, charts, and reports in multiple formats
-            </p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    st.markdown("<br><br>", unsafe_allow_html=True)
     
     # Enhanced Key Features Section
     st.markdown("""
@@ -1443,9 +1444,8 @@ file_hash = hashlib.sha256(_bytes).hexdigest() if _bytes else None
 
 # ==================== Settings & Configuration ====================
 
-filters_container = st.sidebar.container()
-
 with st.sidebar:
+    st.markdown("<h1 style='text-align: center; color: #1f77b4; font-weight: bold;'>📊 Data Insights Hub</h1>", unsafe_allow_html=True)
     st.markdown("---")
     
     with st.expander("⚙️ General Settings", expanded=False):
@@ -1476,6 +1476,8 @@ with st.sidebar:
                 st.rerun()
             
             st.caption("💾 Settings are automatically saved")
+
+filters_container = st.sidebar.container()
 
 # Process dataframe
 recompute_df = False
@@ -2600,7 +2602,7 @@ elif selected_view == "🔬 Steady State":
                     font=dict(size=14, color="#1F2A44")
                 )
 
-                st.plotly_chart(fig_pie, use_container_width=True)
+                st.plotly_chart(fig_pie, width='stretch')
 
             except Exception as e:
                 st.error(f"Could not generate Pie Chart: {e}")
@@ -2624,10 +2626,10 @@ elif selected_view == "🔬 Steady State":
         regime_cols = st.columns(len(summary_stats))
         
         for idx, row in summary_stats.iterrows():
-            regime_id = int(row['Regime'])
+            regime_id = int(row['Regime'].iloc[0]) if isinstance(row['Regime'], pd.Series) else int(row['Regime'])
             total_min = row[('Duration_Min', 'sum')]
             avg_val = row[(mean_col_name, 'mean')]
-            count = int(row[('Duration_Min', 'count')])
+            count = int(row[('Duration_Min', 'count')].iloc[0]) if isinstance(row[('Duration_Min', 'count')], pd.Series) else int(row[('Duration_Min', 'count')])
             
             # Color calculation: Higher duration means higher intensity (more prominent)
             # Normalize duration from 0 to 1, then map to a color scale
@@ -2967,7 +2969,7 @@ elif selected_view == "🔬 Steady State":
             column_config=column_configuration,
             column_order=['Selected', 'Regime', 'Segment', 'Start', 'End', 'Duration (Days)', 'Duration_Min'] + (param_cols if isinstance(target_params, list) else ['Mean', 'Std']),
             hide_index=True,
-            use_container_width=True,
+            width='stretch',
             height=400,
             key='steady_state_editor'
         )
@@ -3002,7 +3004,7 @@ elif selected_view == "🔬 Steady State":
                 "steady_states_data.csv",
                 "text/csv",
                 key='download-csv-table',
-                use_container_width=True
+                width='stretch'
             )
         
 elif selected_view == "🚨 Anomaly Detection":
@@ -3013,14 +3015,9 @@ elif selected_view == "🚨 Anomaly Detection":
 
     st.markdown('<div class="section-header">Anomaly Detection</div>', unsafe_allow_html=True)
 
-    # 1. Method Selection
-    col_method, col_spacer = st.columns([1, 2])
-    with col_method:
-        anomaly_mode = st.selectbox(
-            "Detection Method",
-            ["Unsupervised Fault Detection"],
-            help="The recommended approach for multivariate process data."
-        )
+    # Set the only available method
+    anomaly_mode = "Unsupervised Fault Detection"
+    st.markdown(f"**Detection Method:** {anomaly_mode}")
 
     # ==================== UNSUPERVISED FAULT DETECTION ====================
     if anomaly_mode == "Unsupervised Fault Detection":
@@ -3152,14 +3149,14 @@ elif selected_view == "🚨 Anomaly Detection":
             with col_sens:
                 sensitivity = st.slider(
                     "Anomaly Multiplier (Fault Severity)",
-                    min_value=0.01, max_value=3.00,
+                    min_value=0.01, max_value=1.00,
                     value=0.10, step=0.10, format="%.2f",
                     key='anomaly_multiplier_slider'
                 )
                 st.markdown(
                     '<div style="display:flex; justify-content:space-between;">'
                     '<small><b>Min: 0.01</b></small>'
-                    '<small><b>Max: 3.00</b></small>'
+                    '<small><b>Max: 1.00</b></small>'
                     '</div>',
                     unsafe_allow_html=True
                 )
@@ -3602,12 +3599,12 @@ elif selected_view == "🚨 Anomaly Detection":
                         
                         # Tables and Charts
                         st.markdown("### ⚙️ Model Configuration")
-                        st.dataframe(summary_stats, use_container_width=True, hide_index=True)
+                        st.dataframe(summary_stats, width='stretch', hide_index=True)
                         
                         st.markdown("### 📉 Status Distribution")
                         c1, c2 = st.columns([1, 2])
                         with c1:
-                            st.dataframe(status_distribution, use_container_width=True, hide_index=True)
+                            st.dataframe(status_distribution, width='stretch', hide_index=True)
                         with c2:
                             fig_pie = go.Figure(data=[go.Pie(
                                 labels=status_distribution['Status'],
@@ -3616,11 +3613,11 @@ elif selected_view == "🚨 Anomaly Detection":
                                 hole=0.4
                             )])
                             fig_pie.update_layout(title="Health Status Distribution", height=300)
-                            st.plotly_chart(fig_pie, use_container_width=True)
+                            st.plotly_chart(fig_pie, width='stretch')
                         
                         st.markdown("### 🚨 Detected Anomaly Events")
                         if not anomaly_df.empty:
-                            st.dataframe(anomaly_df.head(100), use_container_width=True)
+                            st.dataframe(anomaly_df.head(100), width='stretch')
                         else:
                             st.success("✅ No anomalies detected!")
 
@@ -3809,6 +3806,5 @@ with st.sidebar:
             """
             **Purpose:** An interactive, high-performance platform for time-series data exploration, visualization, and anomaly detection.
             
-            **Built by - Jeevan A. Jadhav**
             """
         )
