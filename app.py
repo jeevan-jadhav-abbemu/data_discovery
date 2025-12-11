@@ -856,7 +856,9 @@ def automated_steady_state_detection(df: pd.DataFrame, cols: Any,
         duration = t_end - t_start
         
         if duration >= pd.Timedelta(minutes=min_duration_minutes):
-            segment_data = ts[t_start:t_end]
+            # OPTIMIZATION 1: Use 'ts_resampled' instead of 'ts'
+            # This drastically reduces the number of data points to process
+            segment_data = ts_resampled[t_start:t_end]
             
             if not segment_data.empty:
                 # Basic info
@@ -867,16 +869,21 @@ def automated_steady_state_detection(df: pd.DataFrame, cols: Any,
                     'Duration_Min': duration.total_seconds() / 60
                 }
                 
-                # Statistics for ALL involved columns
+                # OPTIMIZATION 2: Vectorized aggregation
+                # Calculate all stats for all target columns in one optimized Pandas call
+                # This is significantly faster than looping through columns and calculating individually
+                stats = segment_data[target_cols].agg(['mean', 'std', 'min', 'max'])
+                
+                # Flatten the stats into the row_data dictionary
                 for c in target_cols:
-                    col_seg = segment_data[c]
-                    row_data[f'Mean_{c}'] = col_seg.mean()
-                    row_data[f'Std_{c}'] = col_seg.std()
-                    row_data[f'Min_{c}'] = col_seg.min()
-                    row_data[f'Max_{c}'] = col_seg.max()
+                    row_data[f'Mean_{c}'] = stats.at['mean', c]
+                    row_data[f'Std_{c}'] = stats.at['std', c]
+                    row_data[f'Min_{c}'] = stats.at['min', c]
+                    row_data[f'Max_{c}'] = stats.at['max', c]
                 
                 # If univariate, add generic keys for backward compatibility
                 if not is_multivariate:
+                    # 'cols' is a string in univariate mode
                     row_data['Mean'] = row_data[f'Mean_{cols}']
                     row_data['Std'] = row_data[f'Std_{cols}']
                 
@@ -3019,28 +3026,124 @@ elif selected_view == "🚨 Anomaly Detection":
     if anomaly_mode == "Unsupervised Fault Detection":
         st.markdown("### 🏥 System Health Monitor (Multivariate)")
         st.info("ℹ️ This module correlates selected sensors to generate a composite 'Health Score'. 100% indicates normal operation; 0% indicates critical deviation.")
-
+        
         # --- CONSOLIDATED CONFIG PANEL ---
         st.markdown('<div class="section-header" style="margin-top: 1rem;">1. Model Configuration</div>', unsafe_allow_html=True)
         with st.container(border=True):
 
             # -------- Feature Selection --------
             st.markdown("#### Feature Selection")
-            col_sel, col_info = st.columns([2, 1])
+            
+            # [NEW] Clustering-Based Selection Mode Toggle
+            use_clustering_mode = st.toggle("✨ Enable Clustering-Based Selection", 
+                                            help="Select a primary parameter and choose correlated sensors.")
 
-            with col_sel:
-                multi_params = st.multiselect(
-                    "Select Sensors (Correlated Parameters)",
-                    options=st.session_state.get('num_cols', []),
-                    default=st.session_state.get('num_cols', [])[:3]
-                    if len(st.session_state.get('num_cols', [])) >= 3 else None,
-                    help="Select variables that should move together during normal operation."
-                )
+            if use_clustering_mode:
+                        # [NEW] Clustering Workflow Container
+                        with st.expander("🛠️ Configure Cluster Parameters", expanded=True):
+                            st.caption("Select a primary parameter to find others that move with it.")
+                            
+                            # 1. Select Primary Parameter
+                            numeric_cols = st.session_state.get('num_cols', [])
+                            primary_param = st.selectbox("Select Primary Parameter", options=numeric_cols, index=0)
+                            
+                            if primary_param:
+                                # 2. Calculate Correlations (Cached)
+                                corr_key = f"corr_{primary_param}_{st.session_state.get('prev_df_id', 'init')}"
+                                
+                                if corr_key not in st.session_state:
+                                    df_analysis = df_filtered[numeric_cols].dropna()
+                                    if not df_analysis.empty:
+                                        correlations = df_analysis.corrwith(df_analysis[primary_param]).drop(primary_param)
+                                        st.session_state[corr_key] = correlations
+                                    else:
+                                        st.session_state[corr_key] = pd.Series()
+                                
+                                correlations = st.session_state[corr_key]
 
-            with col_info:
-                st.write("")
-                st.caption("Select at least 2 parameters representing a single asset.")
+                                # Split into Positive and Negative
+                                pos_corr = correlations[correlations > 0].sort_values(ascending=False)
+                                neg_corr = correlations[correlations < 0].sort_values(ascending=True)
 
+                                # Get all correlated parameters
+                                all_corr_params = list(pos_corr.index) + list(neg_corr.index)
+
+                                # Initialize Checkbox State (Default: False/Unchecked)
+                                for p in all_corr_params:
+                                    k = f"chk_{p}"
+                                    if k not in st.session_state:
+                                        st.session_state[k] = False 
+
+                                # 3. Bulk Action Buttons
+                                col_btn1, col_btn2, _ = st.columns([1, 1, 3])
+                                with col_btn1:
+                                    if st.button("☑️ Select All", key="btn_sel_all", help="Select all correlated parameters"):
+                                        for p in all_corr_params:
+                                            st.session_state[f"chk_{p}"] = True
+                                        st.rerun()
+                                        
+                                with col_btn2:
+                                    if st.button("⬜ Deselect All", key="btn_desel_all", help="Deselect all parameters"):
+                                        for p in all_corr_params:
+                                            st.session_state[f"chk_{p}"] = False
+                                        st.rerun()
+
+                                st.markdown("---")
+                                
+                                # 4. Display Checkbox Lists
+                                col_pos, col_neg = st.columns(2)
+                                
+                                selected_from_cluster = []
+
+                                with col_pos:
+                                    st.markdown("##### 📈 Positive Correlation")
+                                    if pos_corr.empty:
+                                        st.caption("No positive correlations found.")
+                                    else:
+                                        for param, score in pos_corr.items():
+                                            k = f"chk_{param}"
+                                            is_checked = st.checkbox(f"{param} ({score:.2f})", key=k)
+                                            if is_checked:
+                                                selected_from_cluster.append(param)
+
+                                with col_neg:
+                                    st.markdown("##### 📉 Negative Correlation")
+                                    if neg_corr.empty:
+                                        st.caption("No negative correlations found.")
+                                    else:
+                                        for param, score in neg_corr.items():
+                                            k = f"chk_{param}"
+                                            is_checked = st.checkbox(f"{param} ({score:.2f})", key=k)
+                                            if is_checked:
+                                                selected_from_cluster.append(param)
+                                
+                                # --- UPDATED LOGIC HERE ---
+                                # Final List Construction: Exclude primary_param
+                                multi_params = selected_from_cluster
+                                
+                                if len(multi_params) >= 2:
+                                    st.success(f"✅ Selected **{len(multi_params)}** parameters for health model (Primary Excluded).")
+                                elif len(multi_params) == 1:
+                                    st.warning("⚠️ Please select at least 2 correlated parameters to run Multivariate Analysis.")
+                                else:
+                                    st.info("ℹ️ Select correlated parameters above to proceed.")
+            
+            else:
+                # [EXISTING] Manual Selection Mode
+                col_sel, col_info = st.columns([2, 1])
+
+                with col_sel:
+                    multi_params = st.multiselect(
+                        "Select Sensors (Correlated Parameters)",
+                        options=st.session_state.get('num_cols', []),
+                        default=st.session_state.get('num_cols', [])[:3]
+                        if len(st.session_state.get('num_cols', [])) >= 3 else None,
+                        help="Select variables that should move together during normal operation."
+                    )
+
+                with col_info:
+                    st.write("")
+                    st.caption("Select at least 2 parameters representing a single asset.")
             st.markdown("---")
             st.markdown("#### Detection Controls")
 
