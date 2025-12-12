@@ -1446,6 +1446,38 @@ file_hash = hashlib.sha256(_bytes).hexdigest() if _bytes else None
 
 with st.sidebar:
     st.markdown("<h1 style='text-align: center; color: #1f77b4; font-weight: bold;'>📊 Data Insights Hub</h1>", unsafe_allow_html=True)
+    
+    # ------------------ NEW FILE UPLOAD SECTION START ------------------
+    # Logic moved here to appear directly below the title
+    
+    # Determine if expander should be open (open if no file is uploaded yet)
+    is_expanded = st.session_state.get('uploaded_file') is None
+    
+    with st.expander("📂 Upload File", expanded=is_expanded):
+        st.caption("Supported: CSV, Excel, Parquet")
+        
+        uploaded_file_sidebar = st.file_uploader(
+            "Choose a file",
+            type=["csv", "xlsx", "xls", "parquet"],
+            help="Supported formats: CSV, Excel, Parquet. Max size: 200 MB",
+            key="sidebar_file_uploader", # Unique key for sidebar
+            label_visibility="collapsed"
+        )
+        
+        if uploaded_file_sidebar is not None:
+            st.session_state['uploaded_file'] = uploaded_file_sidebar
+            file_size_mb = len(uploaded_file_sidebar.getvalue()) / (1024 * 1024)
+            if file_size_mb > 200:
+                st.error(f"❌ File too large ({file_size_mb:.1f} MB)")
+            else:
+                st.success(f"✅ Loaded: {uploaded_file_sidebar.name}")
+                st.caption(f"📦 Size: {file_size_mb:.2f} MB")
+                # Force rerun to update main panel immediately if needed
+                # st.rerun() 
+        elif st.session_state.get('uploaded_file') is not None:
+             st.info(f"✅ Active: **{st.session_state['uploaded_file'].name}**")
+             
+    # ------------------ NEW FILE UPLOAD SECTION END ------------------
     st.markdown("---")
     
     with st.expander("⚙️ General Settings", expanded=False):
